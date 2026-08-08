@@ -3,954 +3,2096 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Genies — Ops Board Demo</title>
-<meta name="description" content="cron-triggered · idempotent · observable bash patterns — deploy the Genies, clear inefficiency.">
+<title>The Genies — AI Crontab Consulting · The Mithril Company</title>
 <style>
-  :root {
-    --bg: #0a0e14;
-    --panel: #121820;
-    --border: #1e2a3a;
-    --text: #c8d6e5;
-    --muted: #6b7c90;
-    --accent: #4da3ff;
-    --blue: #3d8bfd;
-    --cyan: #5eead4;
-    --green: #4ade80;
-    --amber: #fbbf24;
-    --red: #f87171;
-    --glow: rgba(77, 163, 255, 0.35);
-    --font: "SF Mono", "Fira Code", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
-    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #060a12;
+  --panel: #0a1220;
+  --border: #1a3050;
+  --cell: #0c1828;
+  --text: #d0e4f8;
+  --muted: #5a7a9a;
+  --accent: #4ec8f0;
+  --gold: #f0c14b;
+  --green: #3dd68c;
+  --red: #ff5a6a;
+  --genie: #3a9fd8;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr 330px;
+  grid-template-rows: 52px 1fr 128px;
+  grid-template-areas:
+    "top top"
+    "map side"
+    "sheet sheet";
+}
+#topbar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  background: linear-gradient(180deg, #0c1a2e 0%, #08101c 100%);
+  border-bottom: 1px solid var(--border);
+  z-index: 5;
+}
+#topbar h1 {
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  font-weight: 700;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#topbar h1 .logo {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+  object-position: 12% 35%;
+  border: 1px solid #2a5080;
+}
+#topbar h1 span { color: var(--muted); font-weight: 500; font-size: 12px; }
+.badge {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--cell);
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.badge.live { color: var(--green); border-color: #1a4a32; }
+.badge.alert { color: var(--red); border-color: #5a2030; animation: pulse-badge 1.2s ease-in-out infinite; }
+@keyframes pulse-badge { 50% { opacity: 0.55; } }
+.stat-pill { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stat-pill b { color: var(--text); font-weight: 600; }
+.stat-pill .ok { color: var(--green); }
+.stat-pill .warn { color: var(--gold); }
+.stat-pill .bad { color: var(--red); }
+#topbar .spacer { flex: 1; }
+.btn {
+  padding: 5px 10px;
+  border: 1px solid #2a4060;
+  background: #0e1c30;
+  color: #c8dcf0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: background 0.1s, border-color 0.1s;
+}
+.btn:hover { background: #162840; border-color: #3a6090; }
+.btn.primary { border-color: #2a7090; color: var(--accent); background: #0a2030; }
+.btn.primary:hover { background: #0e3048; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+#map-wrap {
+  grid-area: map;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: #040810;
+  overflow: hidden;
+}
+#canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+#overlay-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  font-size: 11px;
+  color: #8aa8c8;
+  background: rgba(6,12,22,0.88);
+  border: 1px solid #1a3858;
+  padding: 7px 11px;
+  border-radius: 6px;
+  pointer-events: none;
+  max-width: 78%;
+  line-height: 1.45;
+}
+#overlay-hint kbd {
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px solid #2a4868;
+  border-radius: 3px;
+  background: #0c1c30;
+  font-size: 10px;
+  color: var(--accent);
+  font-family: inherit;
+}
+#toast {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(8,18,32,0.95);
+  border: 1px solid #3a70a0;
+  color: var(--accent);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.25s;
+  pointer-events: none;
+  z-index: 4;
+  max-width: 90%;
+  text-align: center;
+  box-shadow: 0 4px 24px rgba(0,40,80,0.4);
+}
+#toast.show { opacity: 1; }
+#toast.good { border-color: #2a8060; color: var(--green); }
+#toast.bad { border-color: #803040; color: var(--red); }
+#toast.gold { border-color: #806020; color: var(--gold); }
+
+#side {
+  grid-area: side;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+#side-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.stage-label {
+  font-size: 9px;
+  color: #4a6a88;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid #1a3048;
+  padding-bottom: 3px;
+}
+.blurb { font-size: 11px; color: #7a9ab8; line-height: 1.5; }
+.blurb b { color: #c0d8f0; }
+.blurb em { color: var(--gold); font-style: normal; }
+.sep { border-top: 1px solid #142030; }
+
+.script-list { display: flex; flex-direction: column; gap: 5px; }
+.script-card {
+  border: 1px solid #1e3858;
+  background: #0a1628;
+  border-radius: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: border-color 0.1s, background 0.1s, box-shadow 0.1s;
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.script-card:hover { border-color: #3a6090; background: #0e1e34; }
+.script-card.selected {
+  border-color: var(--accent);
+  background: #0c2038;
+  box-shadow: 0 0 12px rgba(78,200,240,0.15);
+}
+.script-card .portrait {
+  width: 44px; height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid #2a5080;
+  background: #081420;
+}
+.script-card .name {
+  font-size: 11px;
+  color: #d0e8f8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.script-card .desc { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.script-card .qty {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.shop-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.shop-row .btn { flex: 1; min-width: 56px; padding: 4px 6px; font-size: 10px; }
+
+.client-row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  padding: 4px 2px;
+  border-bottom: 1px solid #101c2c;
+  cursor: pointer;
+}
+.client-row:hover { background: #0e1a2c; }
+.client-row.hot-row { background: rgba(255,90,106,0.06); }
+.client-row .dot { width: 8px; height: 8px; border-radius: 50%; }
+.client-row .nm { color: #b0c8e0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.client-row .met { font-variant-numeric: tabular-nums; font-size: 10px; color: var(--muted); }
+.client-row .met.hot { color: var(--red); }
+.client-row .met.cool { color: var(--green); }
+
+.goal-bar {
+  background: #081420;
+  border: 1px solid #1a3858;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.goal-bar .row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.goal-bar .track {
+  height: 6px; background: #0c1828; border-radius: 3px; overflow: hidden; margin-bottom: 6px;
+}
+.goal-bar .fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+.goal-bar .fill.pay { background: linear-gradient(90deg, #f0c14b, #3dd68c); }
+.goal-bar .fill.waste { background: linear-gradient(90deg, #ff5a6a, #3dd68c); }
+
+#log {
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #5a7a98;
+  line-height: 1.55;
+  max-height: 100px;
+  overflow-y: auto;
+}
+#log .ln { border-bottom: 1px solid #0e1824; padding: 2px 0; }
+#log .ln .t { color: #2a4058; margin-right: 6px; }
+#log .ln.good { color: var(--green); }
+#log .ln.bad { color: var(--red); }
+#log .ln.info { color: var(--accent); }
+#log .ln.gold { color: var(--gold); }
+
+#sheet {
+  grid-area: sheet;
+  background: #060e18;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+#sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 12px;
+  background: #0a1424;
+  border-bottom: 1px solid #142438;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+#sheet-head strong { color: var(--gold); font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 12px; }
+#sheet-body { flex: 1; overflow: auto; }
+table.ss {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+table.ss th, table.ss td {
+  border: 1px solid #142438;
+  padding: 4px 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+table.ss th {
+  background: #0c1a2c;
+  color: #5a7a98;
+  font-weight: 600;
+  text-align: center;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+table.ss td.lbl { text-align: left; color: #a0bce0; background: #081018; }
+table.ss tr:hover td { background: #0e1c30; }
+table.ss tr:hover td.lbl { background: #0c1828; }
+table.ss .pos { color: var(--green); }
+table.ss .neg { color: var(--red); }
+table.ss .hl { color: var(--gold); }
+table.ss .muted { color: #3a5070; }
+table.ss .sum td { background: #0a1628; font-weight: 600; }
+
+#modal-bg {
+  position: fixed; inset: 0;
+  background: rgba(2,6,14,0.92);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+}
+#modal-bg.hidden { display: none; }
+#modal {
+  background: #0a1424;
+  border: 1px solid #2a5080;
+  border-radius: 12px;
+  max-width: 720px;
+  width: 100%;
+  max-height: 94vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 80px rgba(0,40,100,0.55), 0 0 0 1px #152840;
+}
+#modal .hero {
+  width: 100%;
+  height: auto;
+  max-height: 280px;
+  object-fit: cover;
+  object-position: center 40%;
+  display: block;
+  border-radius: 12px 12px 0 0;
+  border-bottom: 1px solid #1a4060;
+}
+#modal .body { padding: 18px 22px 22px; }
+#modal h2 {
+  font-size: 20px;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+#modal .sub { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+#modal p { font-size: 13px; line-height: 1.55; color: #98b4d0; margin-bottom: 10px; }
+#modal ul { margin: 0 0 12px 18px; font-size: 12px; color: #7a98b8; line-height: 1.65; }
+#modal li b { color: #c8e0f8; }
+#modal .partners {
+  display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 12px;
+}
+#modal .partners span {
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #0c1c30;
+  border: 1px solid #1e4060;
+  color: #7a9ab8;
+}
+#modal .price {
+  background: linear-gradient(135deg, #0a1c30 0%, #0c2438 100%);
+  border: 1px solid #1e4a68;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 10px 0 12px;
+  font-size: 12px;
+  color: #8ab4d0;
+}
+#modal .price strong {
+  color: var(--gold);
+  font-size: 14px;
+  display: block;
+  margin-bottom: 4px;
+}
+#modal .actions { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+#modal .actions .btn { padding: 8px 16px; font-size: 13px; }
+
+#deploy-panel {
+  position: absolute;
+  display: none;
+  background: rgba(8,16,28,0.97);
+  border: 1px solid #2a6090;
+  border-radius: 8px;
+  padding: 12px;
+  z-index: 6;
+  min-width: 280px;
+  max-width: 320px;
+  box-shadow: 0 12px 40px rgba(0,20,50,0.55);
+}
+#deploy-panel.show { display: block; }
+#deploy-panel h3 { font-size: 13px; color: var(--accent); margin-bottom: 2px; }
+#deploy-panel .sub { font-size: 10px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; }
+#deploy-panel .row {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px; margin-bottom: 5px; font-size: 11px;
+}
+#deploy-panel .tip {
+  font-size: 10px; color: #8ab4d0; background: #0a1c30;
+  border: 1px solid #1a4060; border-radius: 4px; padding: 6px 8px; margin: 6px 0;
+  line-height: 1.4;
+}
+#deploy-panel .tip b { color: var(--gold); }
+#deploy-panel .genie-row {
+  display: flex; gap: 4px; flex-wrap: wrap; margin: 6px 0;
+}
+#deploy-panel .genie-row img {
+  width: 36px; height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid #2a5080;
+  opacity: 0.35;
+  cursor: pointer;
+}
+#deploy-panel .genie-row img.on {
+  opacity: 1;
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(78,200,240,0.35);
+}
+#deploy-panel .genie-row img.pick {
+  outline: 2px solid var(--gold);
+}
+#deploy-panel .row .btn { padding: 4px 10px; font-size: 11px; }
+
+@media (max-width: 900px) {
   body {
-    font-family: var(--sans);
-    background: var(--bg);
-    color: var(--text);
-    overflow: hidden;
-    user-select: none;
+    grid-template-columns: 1fr;
+    grid-template-rows: 48px 1fr 200px 140px;
+    grid-template-areas: "top" "map" "side" "sheet";
   }
-
-  /* ambient grid */
-  body::before {
-    content: "";
-    position: fixed; inset: 0;
-    background:
-      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(61, 139, 253, 0.12), transparent 50%),
-      linear-gradient(rgba(30, 42, 58, 0.4) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(30, 42, 58, 0.4) 1px, transparent 1px);
-    background-size: 100% 100%, 40px 40px, 40px 40px;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  #app {
-    position: relative;
-    z-index: 1;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 12px 16px 16px;
-  }
-
-  header {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    flex-wrap: wrap;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 12px;
-  }
-  header img.hero {
-    width: 72px; height: 48px;
-    object-fit: cover;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    box-shadow: 0 0 20px var(--glow);
-  }
-  header h1 {
-    font-family: var(--font);
-    font-size: 1.15rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    color: #e8f1ff;
-  }
-  header h1 span { color: var(--accent); }
-  header .sub {
-    font-family: var(--font);
-    font-size: 0.7rem;
-    color: var(--muted);
-    letter-spacing: 0.06em;
-  }
-  .stats {
-    margin-left: auto;
-    display: flex;
-    gap: 14px;
-    font-family: var(--font);
-    font-size: 0.75rem;
-  }
-  .stat { text-align: right; }
-  .stat .label { color: var(--muted); display: block; font-size: 0.65rem; }
-  .stat .val { color: var(--cyan); font-size: 1rem; }
-  .stat .val.warn { color: var(--amber); }
-  .stat .val.good { color: var(--green); }
-
-  .toolbar {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
-    align-items: center;
-  }
-  button {
-    font-family: var(--font);
-    font-size: 0.72rem;
-    background: var(--panel);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 7px 12px;
-    cursor: pointer;
-    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
-  }
-  button:hover { border-color: var(--accent); box-shadow: 0 0 12px var(--glow); }
-  button:active { transform: translateY(1px); }
-  button.primary {
-    background: linear-gradient(180deg, #1a3a5c, #12283f);
-    border-color: var(--blue);
-    color: #dcecff;
-  }
-  button.active-genie {
-    border-color: var(--cyan);
-    box-shadow: 0 0 14px rgba(94, 234, 212, 0.35);
-    color: var(--cyan);
-  }
-  button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
-
-  .genie-bar {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    flex: 1;
-  }
-  .genie-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 108px;
-  }
-  .genie-btn .dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--blue);
-    box-shadow: 0 0 8px var(--accent);
-  }
-  .genie-btn.cooling .dot { background: var(--muted); box-shadow: none; }
-  .genie-btn .cd {
-    font-size: 0.65rem;
-    color: var(--muted);
-  }
-
-  main {
-    flex: 1;
-    min-height: 0;
-    display: grid;
-    grid-template-columns: 1fr 280px;
-    gap: 12px;
-  }
-  @media (max-width: 820px) {
-    main { grid-template-columns: 1fr; }
-    .side { max-height: 180px; }
-    header img.hero { width: 56px; height: 36px; }
-  }
-
-  .board-wrap {
-    position: relative;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    overflow: hidden;
-    min-height: 280px;
-  }
-  #board {
-    display: block;
-    width: 100%;
-    height: 100%;
-    cursor: crosshair;
-  }
-
-  .side {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    min-height: 0;
-  }
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 12px;
-    font-family: var(--font);
-    font-size: 0.7rem;
-  }
-  .panel h2 {
-    font-size: 0.68rem;
-    color: var(--muted);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
-  #log {
-    flex: 1;
-    overflow-y: auto;
-    min-height: 100px;
-    line-height: 1.45;
-    color: var(--muted);
-  }
-  #log .line { margin-bottom: 4px; }
-  #log .ok { color: var(--green); }
-  #log .run { color: var(--accent); }
-  #log .warn { color: var(--amber); }
-  #log .sys { color: var(--cyan); }
-
-  .principles {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
-  }
-  .principles div {
-    background: rgba(77, 163, 255, 0.06);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 8px;
-    color: var(--text);
-  }
-  .principles strong { color: var(--accent); display: block; font-size: 0.68rem; }
-
-  footer {
-    margin-top: 10px;
-    font-family: var(--font);
-    font-size: 0.65rem;
-    color: var(--muted);
-    display: flex;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  footer a { color: var(--accent); text-decoration: none; }
-  footer a:hover { text-decoration: underline; }
-
-  /* overlays */
-  .overlay {
-    position: fixed; inset: 0;
-    background: rgba(6, 10, 16, 0.88);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 50;
-    padding: 20px;
-  }
-  .overlay.hidden { display: none; }
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    max-width: 520px;
-    width: 100%;
-    padding: 24px;
-    box-shadow: 0 0 40px var(--glow);
-    text-align: center;
-  }
-  .card img {
-    width: 100%;
-    max-height: 200px;
-    object-fit: cover;
-    border-radius: 10px;
-    margin-bottom: 16px;
-    border: 1px solid var(--border);
-  }
-  .card h2 {
-    font-family: var(--font);
-    font-size: 1.3rem;
-    margin-bottom: 8px;
-    color: #e8f1ff;
-  }
-  .card p {
-    color: var(--muted);
-    font-size: 0.9rem;
-    line-height: 1.5;
-    margin-bottom: 12px;
-  }
-  .card .hint {
-    font-family: var(--font);
-    font-size: 0.72rem;
-    color: var(--cyan);
-    margin-bottom: 16px;
-  }
-  .card button { font-size: 0.85rem; padding: 10px 20px; }
-
-  .toast {
-    position: fixed;
-    bottom: 24px; left: 50%;
-    transform: translateX(-50%) translateY(20px);
-    background: #152030;
-    border: 1px solid var(--blue);
-    color: var(--cyan);
-    font-family: var(--font);
-    font-size: 0.8rem;
-    padding: 10px 18px;
-    border-radius: 8px;
-    opacity: 0;
-    transition: opacity 0.25s, transform 0.25s;
-    z-index: 40;
-    pointer-events: none;
-  }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #side { border-left: none; border-top: 1px solid var(--border); max-height: 200px; }
+  #modal .hero { max-height: 180px; }
+}
 </style>
 </head>
 <body>
 
-<div id="app">
-  <header>
-    <img class="hero" id="heroImg" alt="The Genies"
-      src="https://mithril-media.sfo3.digitaloceanspaces.com/TheGenies/genies-hero.jpg">
-    <div>
-      <h1>The <span>Genies</span></h1>
-      <div class="sub">cron-triggered · idempotent · observable · deliberately boring</div>
-    </div>
-    <div class="stats">
-      <div class="stat">
-        <span class="label">EFFICIENCY</span>
-        <span class="val" id="statEff">0%</span>
-      </div>
-      <div class="stat">
-        <span class="label">PAYBACK</span>
-        <span class="val warn" id="statPay">24 mo</span>
-      </div>
-      <div class="stat">
-        <span class="label">CLEARED</span>
-        <span class="val good" id="statCleared">0</span>
-      </div>
-      <div class="stat">
-        <span class="label">WAVE</span>
-        <span class="val" id="statWave">1</span>
-      </div>
-    </div>
-  </header>
-
-  <div class="toolbar">
-    <div class="genie-bar" id="genieBar"></div>
-    <button type="button" id="btnMute" title="Toggle ambient audio">♪ MUTE</button>
-    <button type="button" id="btnPause" class="primary">PAUSE</button>
-  </div>
-
-  <main>
-    <div class="board-wrap">
-      <canvas id="board"></canvas>
-    </div>
-    <div class="side">
-      <div class="panel">
-        <h2>Design principles</h2>
-        <div class="principles">
-          <div><strong>cron-triggered</strong> fire on schedule</div>
-          <div><strong>idempotent</strong> safe re-runs</div>
-          <div><strong>observable</strong> logs you trust</div>
-          <div><strong>boring</strong> same patterns, many envs</div>
-        </div>
-      </div>
-      <div class="panel" style="flex:1;display:flex;flex-direction:column;min-height:0">
-        <h2>Terminal</h2>
-        <div id="log"></div>
-      </div>
-    </div>
-  </main>
-
-  <footer>
-    <span>The Mithril Company · pay once · typical payback &lt; 24 months</span>
-    <span>
-      <a href="https://themithrilcompany.com">themithrilcompany.com</a>
-      · click a mess, then a Genie · or select Genie first
-    </span>
-  </footer>
+<div id="topbar">
+  <h1>
+    <img class="logo" src="assets/genies-hero.png" alt="" id="top-logo"
+      onerror="this.src='https://mithril-media.sfo3.digitaloceanspaces.com/TheGenies/genies-hero.jpg'">
+    THE GENIES <span>AI crontab consulting</span>
+  </h1>
+  <span class="badge live" id="badge-live">● OPS LIVE</span>
+  <span class="stat-pill">Month <b id="ui-month">1</b></span>
+  <span class="stat-pill">Cash <b id="ui-cash" class="ok">$0</b></span>
+  <span class="stat-pill">Combo <b id="ui-combo" class="warn">×1</b></span>
+  <span class="stat-pill">Waste <b id="ui-waste" class="warn">—</b></span>
+  <span class="stat-pill">Payback <b id="ui-payback">—</b></span>
+  <span class="spacer"></span>
+  <button class="btn" id="btn-mute" title="Toggle ambient audio">♪ Mute</button>
+  <button class="btn" id="btn-pause" title="Space">⏸ Pause</button>
+  <button class="btn" id="btn-about">About</button>
+  <button class="btn primary" id="btn-tick" title="Advance one month">⏭ Month+</button>
 </div>
 
-<div class="overlay" id="startOverlay">
-  <div class="card">
-    <img src="https://mithril-media.sfo3.digitaloceanspaces.com/TheGenies/genies-hero.jpg"
-      alt="Blue genie bash scripts in a data center">
-    <h2>The Genies</h2>
-    <p>
-      Inefficiency is spawning across the ops board.
-      Deploy battle-tested bash Genies — <em>cron</em>, <em>idempotent</em>,
-      <em>observe</em>, <em>cleanup</em>, <em>orchestrate</em> — and reclaim months of payback.
-    </p>
-    <div class="hint">Select a Genie → click a red task node · ambient audio starts on play</div>
-    <button type="button" class="primary" id="btnStart">START OPS</button>
+<div id="map-wrap">
+  <canvas id="canvas"></canvas>
+  <div id="toast"></div>
+  <div id="deploy-panel"></div>
+  <div id="overlay-hint">
+    <kbd>WASD</kbd> drive · <kbd>Shift</kbd> turbo · <kbd>E</kbd> install selected Genie ·
+    <kbd>Q</kbd>/<kbd>1–5</kbd> select · <kbd>F</kbd> site panel · click minimap warp ·
+    win: payback <b style="color:#f0c14b">≤24 mo</b> &amp; waste &lt;15%
   </div>
 </div>
 
-<div class="overlay hidden" id="winOverlay">
-  <div class="card">
-    <h2>Board quiet.</h2>
-    <p id="winText">Payback achieved. The scripts keep running; the noise does not.</p>
-    <button type="button" class="primary" id="btnAgain">RUN AGAIN</button>
+<aside id="side">
+  <div id="side-scroll">
+    <div class="stage-label">Win goals</div>
+    <div class="goal-bar" id="goal-bar">
+      <div class="row"><span>Payback ≤ 24 mo</span><span id="goal-pb">—</span></div>
+      <div class="track"><div class="fill pay" id="goal-pb-fill" style="width:0%"></div></div>
+      <div class="row"><span>Waste &lt; 15%</span><span id="goal-w">—</span></div>
+      <div class="track"><div class="fill waste" id="goal-w-fill" style="width:0%"></div></div>
+    </div>
+
+    <div class="stage-label">Product</div>
+    <div class="blurb">
+      Five blue <b>bash Genies</b> — pay once, typical payback under <em>24 months</em>.
+      Match Genies to site affinities for combo bonus. Kill <b>incidents</b> with the right script.
+    </div>
+
+    <div class="sep"></div>
+    <div class="stage-label">Genie scripts (E installs selected)</div>
+    <div class="script-list" id="script-list"></div>
+
+    <div class="sep"></div>
+    <div class="stage-label">Buy inventory (cash)</div>
+    <div class="shop-row" id="shop-row"></div>
+
+    <div class="sep"></div>
+    <div class="stage-label">Client sites (click → warp)</div>
+    <div id="client-list"></div>
+
+    <div class="sep"></div>
+    <div class="stage-label">Ops log</div>
+    <div id="log"></div>
+  </div>
+</aside>
+
+<div id="sheet">
+  <div id="sheet-head">
+    <span>Ledger</span>
+    <strong>The Genies — Client Efficiency Spreadsheet</strong>
+    <span style="margin-left:auto">Fee ÷ monthly savings = payback · affinities boost savings</span>
+  </div>
+  <div id="sheet-body">
+    <table class="ss" id="ss-table">
+      <thead>
+        <tr>
+          <th>A · Client</th>
+          <th>B · Vertical</th>
+          <th>C · Fee ($k)</th>
+          <th>D · Waste%</th>
+          <th>E · Genies</th>
+          <th>F · $/mo save</th>
+          <th>G · Cum. save</th>
+          <th>H · Payback mo</th>
+          <th>I · Status</th>
+        </tr>
+      </thead>
+      <tbody id="ss-body"></tbody>
+    </table>
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div id="modal-bg">
+  <div id="modal">
+    <img class="hero" src="assets/genies-hero.png" alt="The five Genies"
+      onerror="this.src='https://mithril-media.sfo3.digitaloceanspaces.com/TheGenies/genies-hero.jpg'">
+    <div class="body">
+      <h2>◈ The Genies</h2>
+      <div class="sub">AI crontab consulting · The Mithril Company</div>
+      <p>
+        Five friendly bash Genies — <b style="color:#4ec8f0">cron.sh</b>,
+        <b style="color:#4ec8f0">idempotent.sh</b>, <b style="color:#4ec8f0">observe.sh</b>,
+        <b style="color:#4ec8f0">cleanup.sh</b>, <b style="color:#4ec8f0">orchestrate.sh</b> —
+        that schedule, re-run safely, observe, clean up, and orchestrate work across real systems.
+        Pay once. Most owners see payback in roughly <b style="color:#f0c14b">24 months</b>.
+      </p>
+      <div class="stage-label" style="margin-top:4px">Interfaces (same patterns, many environments)</div>
+      <div class="partners">
+        <span>Pepsi</span><span>Starbucks</span><span>Taco Bell</span>
+        <span>Marvel comics video game</span><span>Rare Earth Refining</span>
+        <span>Si semiconductor automation</span><span>Disney</span>
+        <span>Wiring harness robots</span><span>Sentient superconducting robots</span>
+      </div>
+      <div class="price">
+        <strong>Play: deploy Genies across the city</strong>
+        Drive the Mithril van · park at a client · press <b>E</b> to install the selected Genie ·
+        match affinities for combos · clear red incident markers · buy more scripts with cash.
+        Win when portfolio average payback ≤ 24 months and average waste &lt; 15%.
+      </div>
+      <ul>
+        <li><b>WASD / arrows</b> — drive · <b>Shift</b> turbo</li>
+        <li><b>E</b> — install selected Genie at nearest site (fast)</li>
+        <li><b>F</b> or click building — open site panel</li>
+        <li><b>1–5 / Q</b> — select script · shop buttons buy more</li>
+        <li><b>Month+</b> or wait — simulation advances; waste grows without scripts</li>
+      </ul>
+      <div class="actions">
+        <button class="btn primary" id="btn-start">▶ Start consulting</button>
+        <button class="btn" id="btn-start-hard">Hard mode (faster waste)</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
-(function () {
-  "use strict";
+"use strict";
 
-  const HERO =
-    "https://mithril-media.sfo3.digitaloceanspaces.com/TheGenies/genies-hero.jpg";
+const HERO_SRC = "assets/genies-hero.png";
+const HERO_FALLBACK = "https://mithril-media.sfo3.digitaloceanspaces.com/TheGenies/genies-hero.jpg";
 
-  const GENIES = [
-    { id: "cron",        label: "cron.sh",        color: "#4da3ff", cool: 1.8, power: 1.0, blurb: "schedule fire" },
-    { id: "idempotent",  label: "idempotent.sh",  color: "#5eead4", cool: 2.2, power: 1.3, blurb: "safe re-run" },
-    { id: "observe",     label: "observe.sh",     color: "#a78bfa", cool: 1.4, power: 0.9, blurb: "metrics+logs" },
-    { id: "cleanup",     label: "cleanup.sh",     color: "#fbbf24", cool: 2.0, power: 1.4, blurb: "drain waste" },
-    { id: "orchestrate", label: "orchestrate.sh", color: "#4ade80", cool: 2.8, power: 1.8, blurb: "chain systems" },
-  ];
+// Source crops in hero image — five genies L→R
+const GENIE_CROPS = {
+  cron:  { sx: 20,   sy: 80,  sw: 280, sh: 720 },
+  idem:  { sx: 280,  sy: 60,  sw: 280, sh: 740 },
+  obs:   { sx: 560,  sy: 70,  sw: 280, sh: 730 },
+  clean: { sx: 860,  sy: 70,  sw: 280, sh: 730 },
+  orch:  { sx: 1160, sy: 70,  sw: 300, sh: 730 }
+};
 
-  const DOMAINS = [
-    { name: "QSR ops", tags: ["Pepsi", "Starbucks", "Taco Bell"] },
-    { name: "Entertainment", tags: ["Marvel pipeline", "Disney"] },
-    { name: "Materials", tags: ["rare-earth", "Si fab"] },
-    { name: "Robots", tags: ["harness fleet"] },
-    { name: "Compute", tags: ["SCSC robots"] },
-  ];
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d", { alpha: false });
 
-  const TASK_KINDS = [
-    { kind: "stuck-job", label: "stuck job", hp: 30, xp: 8 },
-    { kind: "drift", label: "config drift", hp: 40, xp: 10 },
-    { kind: "noise", label: "alert noise", hp: 25, xp: 6 },
-    { kind: "waste", label: "temp waste", hp: 35, xp: 9 },
-    { kind: "manual", label: "manual hop", hp: 50, xp: 14 },
-    { kind: "dup", label: "duplicate run", hp: 28, xp: 7 },
-  ];
+const heroImg = new Image();
+heroImg.src = HERO_SRC;
+let heroReady = false;
+heroImg.onerror = () => { heroImg.src = HERO_FALLBACK; };
+heroImg.onload = () => { heroReady = true; };
 
-  // ── Audio (Web Audio ambient, PlasmaSim-style) ──
-  const AudioEng = (() => {
-    let ctx = null, master = null, ambient = null, muted = false;
+const portraitCache = {};
+function getPortrait(id, size = 88) {
+  const key = id + "_" + size;
+  if (portraitCache[key]) return portraitCache[key];
+  const crop = GENIE_CROPS[id];
+  if (!crop || !heroReady) return null;
+  const c = document.createElement("canvas");
+  c.width = size; c.height = size;
+  const g = c.getContext("2d");
+  g.fillStyle = "#081420";
+  g.fillRect(0, 0, size, size);
+  const scale = Math.max(size / crop.sw, size / crop.sh);
+  const dw = crop.sw * scale, dh = crop.sh * scale;
+  g.drawImage(heroImg, crop.sx, crop.sy, crop.sw, crop.sh,
+    (size - dw) / 2, (size - dh) / 2 + size * 0.05, dw, dh);
+  portraitCache[key] = c;
+  return c;
+}
 
-    function getCtx() {
-      if (!ctx) {
-        ctx = new (window.AudioContext || window.webkitAudioContext)();
-        master = ctx.createGain();
-        master.gain.value = 0.35;
-        const lp = ctx.createBiquadFilter();
-        lp.type = "lowpass";
-        lp.frequency.value = 1800;
-        master.connect(lp);
-        lp.connect(ctx.destination);
-      }
-      if (ctx.state === "suspended") ctx.resume();
-      return ctx;
+// ── Scripts ──
+const SCRIPTS = [
+  { id: "cron",  key: "1", file: "cron.sh",       name: "cron.sh",       desc: "Schedule & fire recurring work",  waste: -9,  saveMul: 1.16, passive: 0.45, cost: 4.5, color: "#4da3ff", tags: ["qsr", "schedule"] },
+  { id: "idem",  key: "2", file: "idempotent.sh", name: "idempotent.sh", desc: "Re-run safely; converge state",  waste: -7,  saveMul: 1.12, passive: 0.55, cost: 5.0, color: "#5eead4", tags: ["semi", "stabilize"], stabilize: true },
+  { id: "obs",   key: "3", file: "observe.sh",    name: "observe.sh",    desc: "Metrics, logs, health checks",   waste: -4,  saveMul: 1.28, passive: 0.25, cost: 3.5, color: "#a78bfa", tags: ["ent", "observe"], reveal: true },
+  { id: "clean", key: "4", file: "cleanup.sh",    name: "cleanup.sh",    desc: "Drain waste, stuck jobs, temp",  waste: -16, saveMul: 1.06, passive: 1.35, cost: 4.0, color: "#fbbf24", tags: ["materials", "waste"] },
+  { id: "orch",  key: "5", file: "orchestrate.sh",name: "orchestrate.sh",desc: "Chain steps across systems",    waste: -6,  saveMul: 1.38, passive: 0.7,  cost: 7.5, color: "#4ade80", tags: ["hpc", "chain"], chain: true }
+];
+
+const WORLD = { w: 2400, h: 1600 };
+
+// preferred: script ids that get affinity bonus at this site
+const CLIENTS = [
+  { id: "pepsi",  name: "Pepsi Ops",           short: "PEPSI",  vertical: "QSR / CPG",        fee: 41,  x: 320,  y: 380,  color: "#004b93", accent: "#e32934", w: 120, h: 90,  pref: ["cron", "clean"],  domain: "qsr" },
+  { id: "sbux",   name: "Starbucks Roastery",  short: "SBUX",   vertical: "QSR / Retail",     fee: 48,  x: 620,  y: 280,  color: "#00704a", accent: "#cba258", w: 110, h: 100, pref: ["cron", "obs"],    domain: "qsr" },
+  { id: "tbell",  name: "Taco Bell Live Más",  short: "TBELL",  vertical: "QSR",              fee: 36,  x: 900,  y: 420,  color: "#702082", accent: "#a77bca", w: 115, h: 85,  pref: ["cron", "clean"],  domain: "qsr" },
+  { id: "marvel", name: "Marvel Game Studio",  short: "MARVEL", vertical: "Entertainment IP", fee: 72,  x: 1280, y: 300,  color: "#8b1519", accent: "#f7c948", w: 140, h: 110, pref: ["orch", "obs"],   domain: "ent" },
+  { id: "ree",    name: "Rare Earth Refining", short: "REE",    vertical: "Materials",        fee: 62,  x: 380,  y: 780,  color: "#4a5568", accent: "#68d391", w: 150, h: 100, pref: ["clean", "idem"], domain: "materials" },
+  { id: "semi",   name: "Si Process Fab",      short: "SEMI",   vertical: "Semiconductor",    fee: 91,  x: 780,  y: 900,  color: "#1a365d", accent: "#63b3ed", w: 160, h: 95,  pref: ["idem", "orch"],  domain: "semi" },
+  { id: "disney", name: "Disney Systems",      short: "DISNEY", vertical: "Entertainment",    fee: 85,  x: 1500, y: 700,  color: "#1a365d", accent: "#f6e05e", w: 145, h: 105, pref: ["obs", "orch"],   domain: "ent" },
+  { id: "harness",name: "Harness Robotics",    short: "WIRE",   vertical: "Physical auto",    fee: 38,  x: 1100, y: 1100, color: "#744210", accent: "#ed8936", w: 130, h: 90,  pref: ["orch", "cron"],  domain: "robots" },
+  { id: "scbot",  name: "SC Supercompute Bots",short: "SCBOT",  vertical: "HPC / Sentient",   fee: 120, x: 1800, y: 980,  color: "#2b6cb0", accent: "#9f7aea", w: 170, h: 120, pref: ["orch", "idem"],  domain: "hpc" }
+];
+
+// Incident types needing a specific genie
+const INCIDENT_TYPES = [
+  { id: "stuck",   label: "stuck job",       need: "cron",  waste: 12, color: "#4da3ff" },
+  { id: "drift",   label: "config drift",    need: "idem",  waste: 10, color: "#5eead4" },
+  { id: "alerts",  label: "alert storm",     need: "obs",   waste: 9,  color: "#a78bfa" },
+  { id: "leak",    label: "temp leak",       need: "clean", waste: 14, color: "#fbbf24" },
+  { id: "silo",    label: "pipeline silo",   need: "orch",  waste: 11, color: "#4ade80" }
+];
+
+const state = {
+  running: false,
+  paused: false,
+  hard: false,
+  month: 1,
+  monthT: 0,
+  monthMs: 8500,
+  cash: 180,
+  inventory: { cron: 6, idem: 5, obs: 5, clean: 6, orch: 4 },
+  selectedScript: "cron",
+  van: { x: 200, y: 200, vx: 0, vy: 0, angle: 0, speed: 0 },
+  keys: Object.create(null),
+  sites: {},
+  log: [],
+  win: false,
+  nearSite: null,
+  particles: [],
+  floats: [],
+  traffic: [],
+  incidents: [],
+  time: 0,
+  cam: { x: 0, y: 0 },
+  floatingGenies: [],
+  combo: 0,
+  comboTimer: 0,
+  deployCD: 0,
+  monthFlash: 0
+};
+
+// ── Audio (Web Audio ambient + SFX, PlasmaSim-style) ──
+const AudioEng = (() => {
+  let ctx = null, master = null, ambient = null, muted = false, started = false;
+
+  function getCtx() {
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctx.createGain();
+      master.gain.value = 0.38;
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 2000;
+      master.connect(lp);
+      lp.connect(ctx.destination);
     }
+    if (ctx.state === "suspended") ctx.resume();
+    return ctx;
+  }
 
-    function oneShot(freq, type, dur, vol) {
-      if (muted) return;
-      const c = getCtx();
+  function oneShot(freq, type, dur, vol) {
+    if (muted || !started) return;
+    const c = getCtx();
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, c.currentTime);
+    o.frequency.exponentialRampToValueAtTime(Math.max(40, freq * 0.4), c.currentTime + dur);
+    g.gain.setValueAtTime(vol, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
+    o.connect(g); g.connect(master);
+    o.start(); o.stop(c.currentTime + dur);
+  }
+
+  function startAmbient() {
+    if (muted || ambient) return;
+    const c = getCtx();
+    const nodes = [];
+    const make = (type, freq, vol) => {
       const o = c.createOscillator();
       const g = c.createGain();
-      o.type = type;
-      o.frequency.setValueAtTime(freq, c.currentTime);
-      o.frequency.exponentialRampToValueAtTime(Math.max(40, freq * 0.45), c.currentTime + dur);
-      g.gain.setValueAtTime(vol, c.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
-      o.connect(g); g.connect(master);
-      o.start(); o.stop(c.currentTime + dur);
-    }
-
-    function startAmbient() {
-      if (muted || ambient) return;
-      const c = getCtx();
-      const nodes = [];
-      // deep blue drone
-      const d1 = c.createOscillator();
-      const g1 = c.createGain();
-      d1.type = "sine"; d1.frequency.value = 42;
-      g1.gain.value = 0.07;
-      d1.connect(g1); g1.connect(master); d1.start();
-      nodes.push(d1, g1);
-      // soft fifth
-      const d2 = c.createOscillator();
-      const g2 = c.createGain();
-      d2.type = "sine"; d2.frequency.value = 63;
-      g2.gain.value = 0.035;
-      d2.connect(g2); g2.connect(master); d2.start();
-      nodes.push(d2, g2);
-      // gentle shimmer LFO pad
-      const d3 = c.createOscillator();
-      const g3 = c.createGain();
-      const lfo = c.createOscillator();
-      const lfoG = c.createGain();
-      d3.type = "triangle"; d3.frequency.value = 168;
-      g3.gain.value = 0.012;
-      lfo.frequency.value = 0.08;
-      lfoG.gain.value = 0.008;
-      lfo.connect(lfoG); lfoG.connect(g3.gain);
-      d3.connect(g3); g3.connect(master);
-      d3.start(); lfo.start();
-      nodes.push(d3, g3, lfo, lfoG);
-      ambient = nodes;
-    }
-
-    function stopAmbient() {
-      if (!ambient) return;
-      ambient.forEach((n) => { try { if (n.stop) n.stop(); } catch (_) {} });
-      ambient = null;
-    }
-
-    return {
-      init() { getCtx(); startAmbient(); },
-      deploy() { oneShot(330, "triangle", 0.22, 0.22); oneShot(440, "sine", 0.18, 0.12); },
-      clear() { oneShot(520, "sine", 0.35, 0.25); oneShot(780, "triangle", 0.25, 0.12); },
-      spawn() { oneShot(180, "square", 0.08, 0.08); },
-      win() {
-        oneShot(392, "sine", 0.4, 0.2);
-        setTimeout(() => oneShot(494, "sine", 0.4, 0.2), 120);
-        setTimeout(() => oneShot(587, "triangle", 0.6, 0.22), 240);
-      },
-      toggleMute() {
-        muted = !muted;
-        if (master) master.gain.value = muted ? 0 : 0.35;
-        if (muted) stopAmbient(); else startAmbient();
-        return muted;
-      },
-      isMuted() { return muted; },
+      o.type = type; o.frequency.value = freq; g.gain.value = vol;
+      o.connect(g); g.connect(master); o.start();
+      nodes.push(o, g);
     };
-  })();
+    make("sine", 38, 0.07);
+    make("sine", 57, 0.035);
+    make("triangle", 152, 0.012);
+    // slow LFO shimmer
+    const o3 = c.createOscillator();
+    const g3 = c.createGain();
+    const lfo = c.createOscillator();
+    const lfoG = c.createGain();
+    o3.type = "sine"; o3.frequency.value = 228;
+    g3.gain.value = 0.01;
+    lfo.type = "sine"; lfo.frequency.value = 0.07;
+    lfoG.gain.value = 0.006;
+    lfo.connect(lfoG); lfoG.connect(g3.gain);
+    o3.connect(g3); g3.connect(master);
+    o3.start(); lfo.start();
+    nodes.push(o3, g3, lfo, lfoG);
+    ambient = nodes;
+  }
 
-  // ── State ──
-  const state = {
-    running: false,
-    selected: "cron",
-    efficiency: 0,
-    cleared: 0,
-    wave: 1,
-    tasks: [],
-    particles: [],
-    genieCD: Object.fromEntries(GENIES.map((g) => [g.id, 0])),
-    t: 0,
-    spawnTimer: 0,
-    win: false,
+  function stopAmbient() {
+    if (!ambient) return;
+    ambient.forEach(n => { try { if (n.stop) n.stop(); } catch (_) {} });
+    ambient = null;
+  }
+
+  return {
+    start() {
+      started = true;
+      getCtx();
+      startAmbient();
+    },
+    deploy(good) {
+      oneShot(good ? 392 : 260, "triangle", 0.18, 0.2);
+      oneShot(good ? 523 : 220, "sine", 0.22, 0.12);
+    },
+    clear() { oneShot(587, "sine", 0.3, 0.22); oneShot(784, "triangle", 0.25, 0.1); },
+    month() { oneShot(196, "sine", 0.35, 0.15); oneShot(247, "triangle", 0.3, 0.1); },
+    buy() { oneShot(440, "square", 0.08, 0.08); oneShot(660, "sine", 0.12, 0.1); },
+    incident() { oneShot(140, "sawtooth", 0.25, 0.08); },
+    win() {
+      [392, 494, 587, 784].forEach((f, i) =>
+        setTimeout(() => oneShot(f, i % 2 ? "triangle" : "sine", 0.45, 0.18), i * 140));
+    },
+    engine(level) {
+      // soft engine tick while moving hard — rare
+      if (level > 0.5 && Math.random() < 0.02) oneShot(55 + level * 20, "triangle", 0.05, 0.03);
+    },
+    toggleMute() {
+      muted = !muted;
+      if (master) master.gain.value = muted ? 0 : 0.38;
+      if (muted) stopAmbient(); else if (started) startAmbient();
+      return muted;
+    },
+    isMuted() { return muted; }
   };
+})();
 
-  const canvas = document.getElementById("board");
-  const ctx = canvas.getContext("2d");
-  const logEl = document.getElementById("log");
-  const toastEl = document.getElementById("toast");
-  let W = 0, H = 0, dpr = 1;
+function $(id) { return document.getElementById(id); }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+function fmtMoney(k) {
+  if (!isFinite(k)) return "—";
+  if (Math.abs(k) >= 1000) return "$" + (k / 1000).toFixed(2) + "M";
+  if (Math.abs(k) >= 10) return "$" + k.toFixed(1) + "k";
+  return "$" + k.toFixed(2) + "k";
+}
+function fmtMo(m) {
+  if (!isFinite(m) || m > 999) return "∞";
+  return m.toFixed(1) + " mo";
+}
 
-  function log(msg, cls) {
-    const line = document.createElement("div");
-    line.className = "line" + (cls ? " " + cls : "");
-    const ts = new Date().toISOString().slice(11, 19);
-    line.textContent = `[${ts}] ${msg}`;
-    logEl.prepend(line);
-    while (logEl.children.length > 80) logEl.removeChild(logEl.lastChild);
+function toast(msg, ms = 2000, kind = "") {
+  const el = $("toast");
+  el.textContent = msg;
+  el.className = "show" + (kind ? " " + kind : "");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { el.className = ""; }, ms);
+}
+
+function logLine(msg, kind = "") {
+  state.log.unshift({ t: "M" + state.month, msg, kind });
+  if (state.log.length > 50) state.log.pop();
+  renderLog();
+}
+function renderLog() {
+  $("log").innerHTML = state.log.map(l =>
+    `<div class="ln ${l.kind}"><span class="t">${l.t}</span>${esc(l.msg)}</div>`
+  ).join("");
+}
+
+function initSites() {
+  for (const c of CLIENTS) {
+    state.sites[c.id] = {
+      waste: 48 + Math.random() * 38,
+      scripts: {},
+      cumSave: 0,
+      monthlySave: 0,
+      payback: Infinity,
+      status: "noisy",
+      baseSave: c.fee * 0.038 + 0.9 + Math.random() * 0.5,
+      revealed: false,
+      pulse: Math.random() * Math.PI * 2,
+      _passive: 0,
+      _nScripts: 0,
+      _affinity: 1
+    };
+  }
+}
+
+function portraitDataURL(id) {
+  const p = getPortrait(id, 88);
+  return p ? p.toDataURL() : HERO_FALLBACK;
+}
+
+function affinityMul(siteId, scriptId) {
+  const c = CLIENTS.find(x => x.id === siteId);
+  if (!c) return 1;
+  return c.pref.includes(scriptId) ? 1.55 : 1;
+}
+
+function renderScripts() {
+  const el = $("script-list");
+  el.innerHTML = SCRIPTS.map(s => {
+    const qty = state.inventory[s.id] ?? 0;
+    const sel = state.selectedScript === s.id ? " selected" : "";
+    return `<div class="script-card${sel}" data-id="${s.id}">
+      <img class="portrait" src="${portraitDataURL(s.id)}" alt="${s.name}">
+      <div>
+        <div class="name">${s.key} · ${s.name}</div>
+        <div class="desc">${s.desc}</div>
+      </div>
+      <div class="qty">×${qty}</div>
+    </div>`;
+  }).join("");
+  el.querySelectorAll(".script-card").forEach(card => {
+    card.onclick = () => {
+      state.selectedScript = card.dataset.id;
+      renderScripts();
+      renderShop();
+      if (state.nearSite) renderDeployPanel();
+    };
+  });
+}
+
+function renderShop() {
+  const el = $("shop-row");
+  el.innerHTML = SCRIPTS.map(s =>
+    `<button class="btn" data-buy="${s.id}" title="Buy 1 ${s.name}">+${s.file.replace(".sh","")} $${s.cost}k</button>`
+  ).join("");
+  el.querySelectorAll("[data-buy]").forEach(btn => {
+    btn.onclick = () => buyScript(btn.dataset.buy);
+  });
+}
+
+function buyScript(id) {
+  if (!state.running || state.paused) return;
+  const sc = SCRIPTS.find(s => s.id === id);
+  if (!sc) return;
+  if (state.cash < sc.cost) {
+    toast("Need " + fmtMoney(sc.cost) + " for " + sc.name, 1800, "bad");
+    return;
+  }
+  state.cash -= sc.cost;
+  state.inventory[id] = (state.inventory[id] || 0) + 1;
+  AudioEng.buy();
+  logLine("Purchased " + sc.name + " (−" + fmtMoney(sc.cost) + ")", "info");
+  toast("Bought " + sc.name, 1400, "good");
+  renderScripts();
+  renderSheet();
+}
+
+function renderClients() {
+  const el = $("client-list");
+  el.innerHTML = CLIENTS.map(c => {
+    const s = state.sites[c.id];
+    const inc = state.incidents.find(i => i.siteId === c.id);
+    const cls = s.waste > 40 || inc ? "hot" : s.waste < 18 ? "cool" : "";
+    const rowCls = inc ? " hot-row" : "";
+    return `<div class="client-row${rowCls}" data-id="${c.id}">
+      <div class="dot" style="background:${inc ? "#ff5a6a" : c.accent}"></div>
+      <div class="nm">${c.short}${inc ? " ⚠" : ""}</div>
+      <div class="met ${cls}">${s.waste.toFixed(0)}% · ${fmtMo(s.payback)}</div>
+    </div>`;
+  }).join("");
+  el.querySelectorAll(".client-row").forEach(row => {
+    row.onclick = () => warpTo(row.dataset.id);
+  });
+}
+
+function warpTo(id) {
+  const c = CLIENTS.find(x => x.id === id);
+  if (!c) return;
+  state.van.x = c.x + c.w / 2;
+  state.van.y = c.y + c.h + 36;
+  state.van.vx = 0; state.van.vy = 0;
+  toast("Warped ops van → " + c.name, 1600);
+  closeDeploy();
+}
+
+function recomputeSite(id) {
+  const c = CLIENTS.find(x => x.id === id);
+  const s = state.sites[id];
+  if (!c || !s) return;
+
+  let mul = 1;
+  let nScripts = 0;
+  let passive = 0;
+  let affHits = 0;
+  for (const sc of SCRIPTS) {
+    const n = s.scripts[sc.id] || 0;
+    if (n > 0) {
+      nScripts += n;
+      const am = affinityMul(id, sc.id);
+      if (am > 1) affHits += n;
+      mul *= Math.pow(sc.saveMul * (am > 1 ? 1.08 : 1), Math.min(n, 3));
+      passive += sc.passive * n * (am > 1 ? 1.25 : 1);
+    }
+  }
+  // orchestrate chain bonus with nearby orch sites
+  if ((s.scripts.orch || 0) > 0) {
+    for (const o of CLIENTS) {
+      if (o.id === id) continue;
+      if ((state.sites[o.id].scripts.orch || 0) > 0) {
+        const dx = o.x - c.x, dy = o.y - c.y;
+        if (dx * dx + dy * dy < 600 * 600) mul *= 1.1;
+      }
+    }
   }
 
-  function toast(msg) {
-    toastEl.textContent = msg;
-    toastEl.classList.add("show");
-    clearTimeout(toast._t);
-    toast._t = setTimeout(() => toastEl.classList.remove("show"), 1800);
+  const eff = Math.max(0, 1 - s.waste / 100);
+  const noise = s.revealed || (s.scripts.obs || 0) > 0 ? 1 : 0.72;
+  s._affinity = 1 + affHits * 0.06;
+  s.monthlySave = s.baseSave * mul * (0.22 + 0.78 * eff) * noise * s._affinity;
+  s.payback = s.monthlySave > 0.01 ? c.fee / s.monthlySave : Infinity;
+
+  if (s.waste < 12 && nScripts >= 2) s.status = "efficient";
+  else if (nScripts >= 1) s.status = "tuning";
+  else if (s.waste > 70) s.status = "on fire";
+  else s.status = "noisy";
+
+  s._passive = passive;
+  s._nScripts = nScripts;
+}
+
+function recomputeAll() {
+  for (const c of CLIENTS) recomputeSite(c.id);
+}
+
+function statusLabel(st) {
+  return ({ "on fire": "🔥 on fire", noisy: "noisy", tuning: "tuning…", efficient: "✓ efficient" })[st] || st;
+}
+
+function portfolioStats() {
+  const totFee = CLIENTS.reduce((a, c) => a + c.fee, 0);
+  const totMo = CLIENTS.reduce((a, c) => a + state.sites[c.id].monthlySave, 0);
+  const avgPb = totMo > 0.01 ? totFee / totMo : Infinity;
+  const avgWaste = CLIENTS.reduce((a, c) => a + state.sites[c.id].waste, 0) / CLIENTS.length;
+  const nOk = CLIENTS.filter(c => state.sites[c.id].payback <= 24).length;
+  return { totFee, totMo, avgPb, avgWaste, nOk };
+}
+
+function renderGoals() {
+  const { avgPb, avgWaste } = portfolioStats();
+  // payback goal: map 60mo→0%, 24mo→100%
+  const pbProg = clamp((60 - Math.min(avgPb, 60)) / (60 - 24), 0, 1);
+  // waste goal: 60%→0, 15%→100
+  const wProg = clamp((60 - Math.min(avgWaste, 60)) / (60 - 15), 0, 1);
+  $("goal-pb").textContent = fmtMo(avgPb);
+  $("goal-w").textContent = avgWaste.toFixed(1) + "%";
+  $("goal-pb-fill").style.width = (pbProg * 100).toFixed(0) + "%";
+  $("goal-w-fill").style.width = (wProg * 100).toFixed(0) + "%";
+}
+
+function renderSheet() {
+  const body = $("ss-body");
+  const { totFee, totMo, avgPb, nOk } = portfolioStats();
+  let totCum = 0;
+  const rows = CLIENTS.map(c => {
+    const s = state.sites[c.id];
+    totCum += s.cumSave;
+    const pbCls = !isFinite(s.payback) ? "muted" : s.payback <= 24 ? "pos" : s.payback <= 36 ? "hl" : "neg";
+    const wCls = s.waste > 40 ? "neg" : s.waste < 18 ? "pos" : "hl";
+    const scr = SCRIPTS.filter(sc => (s.scripts[sc.id] || 0) > 0)
+      .map(sc => sc.file.replace(".sh", "") + "×" + s.scripts[sc.id])
+      .join(" ") || "—";
+    const pref = c.pref.map(p => SCRIPTS.find(s => s.id === p).file.replace(".sh", "")).join("/");
+    return `<tr>
+      <td class="lbl" title="Affinity: ${pref}">${c.name}</td>
+      <td class="lbl muted">${c.vertical}</td>
+      <td>${c.fee.toFixed(0)}</td>
+      <td class="${wCls}">${s.waste.toFixed(1)}</td>
+      <td class="lbl" style="text-align:center;font-size:10px">${scr}</td>
+      <td class="pos">${s.monthlySave.toFixed(2)}</td>
+      <td>${s.cumSave.toFixed(1)}</td>
+      <td class="${pbCls}">${fmtMo(s.payback)}</td>
+      <td class="lbl">${statusLabel(s.status)}</td>
+    </tr>`;
+  });
+
+  const avgPbCls = avgPb <= 24 ? "pos" : avgPb <= 36 ? "hl" : "neg";
+  rows.push(`<tr class="sum">
+    <td class="lbl">PORTFOLIO</td>
+    <td class="lbl muted">9 sites</td>
+    <td class="hl">${totFee.toFixed(0)}</td>
+    <td></td>
+    <td class="lbl" style="text-align:center">${nOk}/9 ≤24mo</td>
+    <td class="pos">${totMo.toFixed(2)}</td>
+    <td class="hl">${totCum.toFixed(1)}</td>
+    <td class="${avgPbCls}">${fmtMo(avgPb)}</td>
+    <td class="lbl">${state.win ? "✓ PAID BACK" : "in progress"}</td>
+  </tr>`);
+  body.innerHTML = rows.join("");
+
+  $("ui-month").textContent = String(state.month);
+  const cashEl = $("ui-cash");
+  cashEl.textContent = fmtMoney(state.cash);
+  cashEl.className = state.cash >= 0 ? "ok" : "bad";
+
+  const { avgWaste } = portfolioStats();
+  const wEl = $("ui-waste");
+  wEl.textContent = avgWaste.toFixed(1) + "%";
+  wEl.className = avgWaste > 40 ? "bad" : avgWaste < 15 ? "ok" : "warn";
+
+  const pbEl = $("ui-payback");
+  pbEl.textContent = fmtMo(avgPb);
+  pbEl.className = avgPb <= 24 ? "ok" : avgPb <= 36 ? "warn" : "bad";
+
+  const cm = $("ui-combo");
+  cm.textContent = "×" + Math.max(1, state.combo);
+  cm.className = state.combo >= 3 ? "ok" : state.combo >= 2 ? "warn" : "";
+
+  const badge = $("badge-live");
+  if (state.incidents.length) {
+    badge.textContent = "⚠ " + state.incidents.length + " INCIDENT" + (state.incidents.length > 1 ? "S" : "");
+    badge.className = "badge alert";
+  } else {
+    badge.textContent = "● OPS LIVE";
+    badge.className = "badge live";
   }
 
-  function paybackMonths() {
-    // 24 → ~0 as efficiency 0→100
-    const m = Math.max(0, 24 * (1 - state.efficiency / 100));
-    return m;
+  renderClients();
+  renderGoals();
+}
+
+function spawnIncident() {
+  if (state.incidents.length >= 4) return;
+  const free = CLIENTS.filter(c => !state.incidents.find(i => i.siteId === c.id));
+  if (!free.length) return;
+  const c = free[(Math.random() * free.length) | 0];
+  const t = INCIDENT_TYPES[(Math.random() * INCIDENT_TYPES.length) | 0];
+  state.incidents.push({
+    id: Math.random().toString(36).slice(2, 8),
+    siteId: c.id,
+    type: t.id,
+    need: t.need,
+    label: t.label,
+    waste: t.waste,
+    color: t.color,
+    life: 28 + Math.random() * 16,
+    pulse: 0
+  });
+  AudioEng.incident();
+  logLine("INCIDENT @ " + c.short + ": " + t.label + " — need " + t.need + ".sh", "bad");
+  toast("⚠ " + c.short + ": " + t.label + " → use " + t.need + ".sh", 2800, "bad");
+  renderSheet();
+}
+
+function tickIncidents(dt) {
+  for (let i = state.incidents.length - 1; i >= 0; i--) {
+    const inc = state.incidents[i];
+    inc.life -= dt;
+    inc.pulse += dt * 4;
+    if (inc.life <= 0) {
+      const s = state.sites[inc.siteId];
+      if (s) {
+        s.waste = clamp(s.waste + inc.waste, 3, 98);
+        recomputeSite(inc.siteId);
+        logLine(CLIENTS.find(c => c.id === inc.siteId).short +
+          ": incident expired — waste +" + inc.waste + "%", "bad");
+      }
+      state.incidents.splice(i, 1);
+      renderSheet();
+    }
+  }
+}
+
+function resolveIncident(siteId, scriptId) {
+  const idx = state.incidents.findIndex(i => i.siteId === siteId);
+  if (idx < 0) return false;
+  const inc = state.incidents[idx];
+  if (inc.need !== scriptId) return false;
+  state.incidents.splice(idx, 1);
+  const c = CLIENTS.find(x => x.id === siteId);
+  const s = state.sites[siteId];
+  s.waste = clamp(s.waste - inc.waste * 0.85, 3, 98);
+  state.cash += 1.2;
+  state.combo = Math.min(8, state.combo + 1);
+  state.comboTimer = 8;
+  spawnBurst(c.x + c.w / 2, c.y + c.h / 2, inc.color);
+  floatText(c.x + c.w / 2, c.y, "INCIDENT CLEAR", "#3dd68c");
+  AudioEng.clear();
+  logLine("Resolved " + inc.label + " @ " + c.short + " with " + scriptId + ".sh", "good");
+  toast("◈ Incident cleared @ " + c.short, 2000, "good");
+  recomputeSite(siteId);
+  return true;
+}
+
+function advanceMonth() {
+  state.month++;
+  state.monthFlash = 0.6;
+  AudioEng.month();
+  let portfolioSave = 0;
+
+  for (const c of CLIENTS) {
+    const s = state.sites[c.id];
+    const growth = (state.hard ? 4.5 : 2.7) + Math.random() * 1.6;
+    const drain = s._passive || 0;
+    const stab = (s.scripts.idem || 0) > 0 ? 0.5 : 1;
+    s.waste = clamp(s.waste + growth * stab - drain * (1.25 + Math.random() * 0.45), 3, 98);
+
+    if (Math.random() < 0.09 && s._nScripts === 0) {
+      s.waste = clamp(s.waste + 9, 0, 98);
+      logLine(c.short + ": unscheduled outage — waste +9%", "bad");
+    }
+    if (Math.random() < 0.07 && (s.scripts.cron || 0) > 0) {
+      s.waste = clamp(s.waste - 6, 0, 98);
+      logLine(c.short + ": cron batch cleared backlog", "good");
+    }
+    if (Math.random() < 0.05 && (s.scripts.clean || 0) > 0) {
+      s.waste = clamp(s.waste - 4, 0, 98);
+      logLine(c.short + ": cleanup drained temp space", "good");
+    }
+
+    recomputeSite(c.id);
+    s.cumSave += s.monthlySave;
+    portfolioSave += s.monthlySave;
   }
 
-  function updateStats() {
-    document.getElementById("statEff").textContent = state.efficiency.toFixed(0) + "%";
-    const mo = paybackMonths();
-    const el = document.getElementById("statPay");
-    el.textContent = mo < 0.5 ? "PAID" : mo.toFixed(1) + " mo";
-    el.className = "val " + (mo < 6 ? "good" : mo < 14 ? "warn" : "warn");
-    document.getElementById("statCleared").textContent = String(state.cleared);
-    document.getElementById("statWave").textContent = String(state.wave);
+  // operating cost + portfolio income
+  state.cash += portfolioSave - (state.hard ? 0.55 : 0.4);
+
+  // inventory restock
+  if (state.month % 3 === 0) {
+    state.inventory.cron += 1;
+    state.inventory.clean += 1;
+    if (state.month % 6 === 0) {
+      state.inventory.orch += 1;
+      state.inventory.obs += 1;
+      state.inventory.idem += 1;
+    }
+    logLine("Mithril tooling drop: +script inventory", "info");
+    renderScripts();
   }
 
-  function resize() {
-    const wrap = canvas.parentElement;
-    const rect = wrap.getBoundingClientRect();
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    W = Math.max(320, rect.width);
-    H = Math.max(260, rect.height);
-    canvas.width = Math.floor(W * dpr);
-    canvas.height = Math.floor(H * dpr);
-    canvas.style.width = W + "px";
-    canvas.style.height = H + "px";
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // spawn incidents
+  if (Math.random() < (state.hard ? 0.65 : 0.45) || state.incidents.length === 0) {
+    spawnIncident();
+    if (state.hard && Math.random() < 0.4) spawnIncident();
   }
 
-  function buildGenieBar() {
-    const bar = document.getElementById("genieBar");
-    bar.innerHTML = "";
-    GENIES.forEach((g) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "genie-btn" + (state.selected === g.id ? " active-genie" : "");
-      b.dataset.id = g.id;
-      b.innerHTML = `<span class="dot" style="background:${g.color};box-shadow:0 0 8px ${g.color}"></span>
-        <span>${g.label}</span><span class="cd" data-cd="${g.id}"></span>`;
-      b.title = g.blurb;
-      b.addEventListener("click", () => {
-        state.selected = g.id;
-        document.querySelectorAll(".genie-btn").forEach((el) => {
-          el.classList.toggle("active-genie", el.dataset.id === g.id);
-        });
-        log(`selected ${g.label}`, "sys");
-      });
-      bar.appendChild(b);
+  recomputeAll();
+  renderSheet();
+  checkWin();
+  logLine("Month closed · portfolio +" + fmtMoney(portfolioSave) + "/mo", "info");
+}
+
+function checkWin() {
+  if (state.win) return;
+  const { avgPb, avgWaste } = portfolioStats();
+  if (avgPb <= 24 && avgWaste < 15) {
+    state.win = true;
+    AudioEng.win();
+    logLine("PORTFOLIO PAYBACK ≤ 24 mo — Genies engaged.", "good");
+    toast("◈ Win: average payback ≤ 24 months. The scripts paid for themselves.", 5500, "gold");
+  }
+}
+
+function nearestSite(maxDist = 95) {
+  let best = null, bestD = maxDist;
+  const v = state.van;
+  for (const c of CLIENTS) {
+    const cx = c.x + c.w / 2, cy = c.y + c.h / 2;
+    const d = Math.hypot(v.x - cx, v.y - cy);
+    if (d < bestD) { bestD = d; best = c; }
+  }
+  return best;
+}
+
+function deployScript(siteId, scriptId, opts = {}) {
+  const sc = SCRIPTS.find(s => s.id === scriptId);
+  const c = CLIENTS.find(x => x.id === siteId);
+  const s = state.sites[siteId];
+  if (!sc || !c || !s) return false;
+
+  if (state.deployCD > 0 && !opts.force) {
+    toast("Cooling… " + state.deployCD.toFixed(1) + "s", 900);
+    return false;
+  }
+
+  if ((state.inventory[scriptId] || 0) <= 0) {
+    toast("No " + sc.name + " left — buy more", 1800, "bad");
+    return false;
+  }
+  const n = s.scripts[scriptId] || 0;
+  if (n >= 3) {
+    // still allow if it resolves an incident
+    if (!state.incidents.find(i => i.siteId === siteId && i.need === scriptId)) {
+      toast(sc.name + " already at max (×3) on " + c.short, 1600, "bad");
+      return false;
+    }
+  }
+
+  const aff = affinityMul(siteId, scriptId);
+  const comboMul = 1 + Math.min(state.combo, 6) * 0.06;
+
+  // consume inventory unless resolving-only at max
+  if (n < 3) {
+    state.inventory[scriptId]--;
+    s.scripts[scriptId] = n + 1;
+  }
+
+  let wasteDelta = sc.waste * aff * comboMul;
+  // observe always reveals
+  if (sc.reveal) s.revealed = true;
+
+  // resolve incident if matching
+  const resolved = resolveIncident(siteId, scriptId);
+  if (!resolved) {
+    s.waste = clamp(s.waste + wasteDelta, 3, 98);
+  } else {
+    // bonus on top of incident clear
+    s.waste = clamp(s.waste + wasteDelta * 0.4, 3, 98);
+  }
+
+  state.cash -= 0.12;
+  state.deployCD = 0.55;
+
+  if (aff > 1) {
+    state.combo = Math.min(8, state.combo + 1);
+    state.comboTimer = 7;
+  } else {
+    state.comboTimer = Math.max(state.comboTimer, 3);
+  }
+
+  if (!state.floatingGenies.find(g => g.siteId === siteId && g.scriptId === scriptId)) {
+    state.floatingGenies.push({
+      siteId, scriptId,
+      phase: Math.random() * Math.PI * 2,
+      birth: state.time
     });
   }
 
-  function spawnTask(force) {
-    if (!state.running || state.win) return;
-    if (state.tasks.length >= 14 && !force) return;
-    const domain = DOMAINS[(Math.random() * DOMAINS.length) | 0];
-    const kind = TASK_KINDS[(Math.random() * TASK_KINDS.length) | 0];
-    const margin = 48;
-    const t = {
-      id: Math.random().toString(36).slice(2, 9),
-      x: margin + Math.random() * (W - margin * 2),
-      y: margin + Math.random() * (H - margin * 2),
-      vx: (Math.random() - 0.5) * 18,
-      vy: (Math.random() - 0.5) * 18,
-      r: 16 + Math.random() * 6,
-      hp: kind.hp * (0.9 + state.wave * 0.12),
-      maxHp: kind.hp * (0.9 + state.wave * 0.12),
-      kind: kind.kind,
-      label: kind.label,
-      domain: domain.name,
-      tag: domain.tags[(Math.random() * domain.tags.length) | 0],
-      pulse: Math.random() * Math.PI * 2,
-      age: 0,
+  spawnBurst(c.x + c.w / 2, c.y + c.h / 2, sc.color);
+  const label = (aff > 1 ? "AFFINITY " : "") + wasteDelta.toFixed(0) + "% waste";
+  floatText(c.x + c.w / 2, c.y + 10, label, aff > 1 ? "#f0c14b" : sc.color);
+  AudioEng.deploy(aff > 1 || resolved);
+
+  const note = aff > 1 ? " [affinity]" : "";
+  logLine("Deployed " + sc.name + " → " + c.short + note + " (waste " + s.waste.toFixed(0) + "%)", "good");
+  toast((aff > 1 ? "★ " : "🧞 ") + sc.name + " → " + c.name, 1600, aff > 1 ? "gold" : "good");
+
+  recomputeSite(siteId);
+  renderScripts();
+  renderSheet();
+  if (state.nearSite) renderDeployPanel();
+  checkWin();
+  return true;
+}
+
+function floatText(x, y, text, color) {
+  state.floats.push({ x, y, text, color, life: 1.1, vy: -28 });
+}
+
+function renderDeployPanel() {
+  const panel = $("deploy-panel");
+  const c = state.nearSite;
+  if (!c || !state.running) {
+    panel.classList.remove("show");
+    return;
+  }
+  const s = state.sites[c.id];
+  const sc = SCRIPTS.find(x => x.id === state.selectedScript);
+  const inc = state.incidents.find(i => i.siteId === c.id);
+  const thumbs = SCRIPTS.map(x => {
+    const on = (s.scripts[x.id] || 0) > 0 ? " on" : "";
+    const pick = state.selectedScript === x.id ? " pick" : "";
+    return `<img class="${(on + pick).trim()}" data-sid="${x.id}" src="${portraitDataURL(x.id)}" title="${x.name} ×${s.scripts[x.id] || 0}" alt="">`;
+  }).join("");
+
+  const prefs = c.pref.map(p => SCRIPTS.find(s => s.id === p).name).join(", ");
+  let tip = `<b>Affinity:</b> ${prefs} (+55% waste cut, combo++)`;
+  if (inc) tip += `<br><b style="color:#ff5a6a">Incident:</b> ${inc.label} — deploy <b>${inc.need}.sh</b>`;
+
+  panel.innerHTML = `
+    <h3>${c.name}</h3>
+    <div class="sub">${c.vertical} · fee $${c.fee}k · waste ${s.waste.toFixed(1)}% · ${fmtMo(s.payback)}</div>
+    <div class="genie-row">${thumbs}</div>
+    <div class="tip">${tip}</div>
+    <div class="row"><span>Selected</span><span style="color:${sc.color}">${sc.name} ×${state.inventory[sc.id] || 0}</span></div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn primary" id="dp-deploy">Install (E)</button>
+      <button class="btn" id="dp-close">Close</button>
+    </div>
+  `;
+  panel.classList.add("show");
+  positionDeployPanel(c);
+  $("dp-deploy").onclick = () => deployScript(c.id, state.selectedScript);
+  $("dp-close").onclick = () => closeDeploy();
+  panel.querySelectorAll("img[data-sid]").forEach(img => {
+    img.onclick = () => {
+      state.selectedScript = img.dataset.sid;
+      renderScripts();
+      renderDeployPanel();
     };
-    state.tasks.push(t);
-    AudioEng.spawn();
-    log(`noise: ${t.label} @ ${t.domain} (${t.tag})`, "warn");
-  }
+  });
+}
 
-  function hitTest(mx, my) {
-    for (let i = state.tasks.length - 1; i >= 0; i--) {
-      const t = state.tasks[i];
-      const dx = mx - t.x, dy = my - t.y;
-      if (dx * dx + dy * dy <= (t.r + 8) * (t.r + 8)) return t;
+function positionDeployPanel(c) {
+  const panel = $("deploy-panel");
+  const wrap = $("map-wrap");
+  const rect = wrap.getBoundingClientRect();
+  const px = (c.x + c.w + 12 - state.cam.x);
+  const py = (c.y - state.cam.y);
+  panel.style.left = clamp(px, 8, rect.width - 300) + "px";
+  panel.style.top = clamp(py, 8, rect.height - 220) + "px";
+}
+
+function closeDeploy() {
+  state.nearSite = null;
+  $("deploy-panel").classList.remove("show");
+}
+
+function tryQuickDeploy() {
+  const c = nearestSite(115);
+  if (!c) {
+    toast("Drive closer to a client building", 1400);
+    return;
+  }
+  deployScript(c.id, state.selectedScript);
+}
+
+function tryOpenDeploy() {
+  const c = nearestSite(115);
+  if (!c) {
+    toast("Drive closer to a client building");
+    return;
+  }
+  state.nearSite = c;
+  renderDeployPanel();
+}
+
+function spawnBurst(x, y, color) {
+  for (let i = 0; i < 18; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const sp = 50 + Math.random() * 100;
+    state.particles.push({
+      x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+      life: 0.45 + Math.random() * 0.4, color, r: 2 + Math.random() * 3
+    });
+  }
+}
+
+function seedTraffic() {
+  state.traffic = [];
+  for (let i = 0; i < 32; i++) {
+    const horiz = Math.random() < 0.5;
+    const lane = (Math.random() * 8) | 0;
+    state.traffic.push({
+      x: Math.random() * WORLD.w,
+      y: Math.random() * WORLD.h,
+      vx: horiz ? (Math.random() < 0.5 ? 55 : -55) : 0,
+      vy: horiz ? 0 : (Math.random() < 0.5 ? 55 : -55),
+      color: `hsl(${(lane * 40 + Math.random() * 30) | 0},40%,45%)`,
+      w: 14 + Math.random() * 6, h: 7 + Math.random() * 3
+    });
+  }
+}
+
+// ── Input ──
+window.addEventListener("keydown", e => {
+  const k = e.key.toLowerCase();
+  state.keys[k] = true;
+  if (e.key === " " || e.key.startsWith("Arrow") || k === "shift") e.preventDefault();
+  if (k === " " && state.running) togglePause();
+  if (!state.running || state.paused) return;
+  if (k === "e") tryQuickDeploy();
+  if (k === "f") tryOpenDeploy();
+  if (k === "q") {
+    const idx = SCRIPTS.findIndex(s => s.id === state.selectedScript);
+    state.selectedScript = SCRIPTS[(idx + 1) % SCRIPTS.length].id;
+    renderScripts();
+    if (state.nearSite) renderDeployPanel();
+  }
+  if (k >= "1" && k <= "5") {
+    const sc = SCRIPTS[parseInt(k, 10) - 1];
+    if (sc) {
+      state.selectedScript = sc.id;
+      renderScripts();
+      if (state.nearSite) renderDeployPanel();
     }
-    return null;
+  }
+});
+window.addEventListener("keyup", e => {
+  state.keys[e.key.toLowerCase()] = false;
+});
+
+canvas.addEventListener("click", e => {
+  if (!state.running) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) + state.cam.x;
+  const my = (e.clientY - rect.top) + state.cam.y;
+
+  // minimap hit?
+  const w = canvas._cssW || canvas.clientWidth;
+  const h = canvas._cssH || canvas.clientHeight;
+  const mw = 140, mh = 94, mmx = w - mw - 12, mmy = h - mh - 12;
+  const lx = e.clientX - rect.left, ly = e.clientY - rect.top;
+  if (lx >= mmx && lx <= mmx + mw && ly >= mmy && ly <= mmy + mh) {
+    state.van.x = ((lx - mmx) / mw) * WORLD.w;
+    state.van.y = ((ly - mmy) / mh) * WORLD.h;
+    state.van.vx = 0; state.van.vy = 0;
+    toast("Warped via minimap", 1200);
+    return;
   }
 
-  function deployOn(task) {
-    if (!state.running || state.win) return;
-    const g = GENIES.find((x) => x.id === state.selected);
-    if (!g) return;
-    if (state.genieCD[g.id] > 0) {
-      toast(`${g.label} cooling down…`);
+  for (const c of CLIENTS) {
+    if (mx >= c.x && mx <= c.x + c.w && my >= c.y && my <= c.y + c.h) {
+      state.nearSite = c;
+      renderDeployPanel();
       return;
     }
-    state.genieCD[g.id] = g.cool;
-    const dmg = 18 * g.power * (0.85 + Math.random() * 0.3);
-    // affinity bonuses
-    let bonus = 1;
-    if (g.id === "cleanup" && (task.kind === "waste" || task.kind === "noise")) bonus = 1.5;
-    if (g.id === "idempotent" && (task.kind === "dup" || task.kind === "drift")) bonus = 1.5;
-    if (g.id === "cron" && task.kind === "stuck-job") bonus = 1.4;
-    if (g.id === "observe" && task.kind === "noise") bonus = 1.35;
-    if (g.id === "orchestrate" && task.kind === "manual") bonus = 1.55;
-    task.hp -= dmg * bonus;
-    AudioEng.deploy();
-    log(`$ ./${g.label} → ${task.label}  (-${(dmg * bonus).toFixed(0)} waste)`, "run");
-
-    // particles
-    for (let i = 0; i < 10; i++) {
-      state.particles.push({
-        x: task.x, y: task.y,
-        vx: (Math.random() - 0.5) * 80,
-        vy: (Math.random() - 0.5) * 80,
-        life: 0.4 + Math.random() * 0.3,
-        color: g.color,
-      });
-    }
-
-    if (task.hp <= 0) {
-      clearTask(task, g);
-    }
-    refreshCDUI();
   }
+});
 
-  function clearTask(task, g) {
-    const idx = state.tasks.indexOf(task);
-    if (idx >= 0) state.tasks.splice(idx, 1);
-    state.cleared++;
-    const gain = 2.2 + state.wave * 0.35 + Math.random();
-    state.efficiency = Math.min(100, state.efficiency + gain);
-    AudioEng.clear();
-    log(`cleared ${task.label} via ${g.label}  [+${gain.toFixed(1)}% eff]`, "ok");
-    for (let i = 0; i < 18; i++) {
-      state.particles.push({
-        x: task.x, y: task.y,
-        vx: (Math.random() - 0.5) * 140,
-        vy: (Math.random() - 0.5) * 140 - 20,
-        life: 0.5 + Math.random() * 0.4,
-        color: g.color,
-      });
+$("btn-pause").onclick = () => { if (state.running) togglePause(); };
+$("btn-tick").onclick = () => {
+  if (!state.running) return;
+  advanceMonth();
+  state.monthT = 0;
+};
+$("btn-about").onclick = () => $("modal-bg").classList.remove("hidden");
+$("btn-start").onclick = () => startGame(false);
+$("btn-start-hard").onclick = () => startGame(true);
+$("btn-mute").onclick = () => {
+  const m = AudioEng.toggleMute();
+  $("btn-mute").textContent = m ? "♪ Unmute" : "♪ Mute";
+};
+
+function togglePause() {
+  state.paused = !state.paused;
+  $("btn-pause").textContent = state.paused ? "▶ Resume" : "⏸ Pause";
+  if (state.paused) toast("Paused");
+}
+
+function startGame(hard) {
+  AudioEng.start();
+  state.hard = hard;
+  state.running = true;
+  state.paused = false;
+  state.month = 1;
+  state.monthT = 0;
+  state.cash = hard ? 140 : 190;
+  state.win = false;
+  state.inventory = hard
+    ? { cron: 5, idem: 4, obs: 4, clean: 5, orch: 3 }
+    : { cron: 7, idem: 6, obs: 6, clean: 7, orch: 5 };
+  state.selectedScript = "cron";
+  state.van = { x: 200, y: 200, vx: 0, vy: 0, angle: 0, speed: 0 };
+  state.log = [];
+  state.particles = [];
+  state.floats = [];
+  state.floatingGenies = [];
+  state.incidents = [];
+  state.combo = 0;
+  state.comboTimer = 0;
+  state.deployCD = 0;
+  initSites();
+  recomputeAll();
+  seedTraffic();
+  renderScripts();
+  renderShop();
+  renderSheet();
+  renderLog();
+  closeDeploy();
+  $("modal-bg").classList.add("hidden");
+  $("btn-pause").textContent = "⏸ Pause";
+  // early incident to teach the system
+  setTimeout(() => { if (state.running) spawnIncident(); }, 4000);
+  logLine(hard ? "Hard engagement started" : "Engagement started — E installs Genies", "info");
+  toast(hard ? "Hard mode: waste & incidents harder" : "Welcome. Match affinities. Clear incidents.", 2800, "good");
+}
+
+// ── Update ──
+function update(dt) {
+  if (!state.running || state.paused) {
+    // still allow cam idle
+  } else {
+    state.time += dt;
+    if (state.deployCD > 0) state.deployCD = Math.max(0, state.deployCD - dt);
+    if (state.monthFlash > 0) state.monthFlash = Math.max(0, state.monthFlash - dt);
+    if (state.comboTimer > 0) {
+      state.comboTimer -= dt;
+      if (state.comboTimer <= 0) state.combo = Math.max(0, state.combo - 1);
+      if (state.combo > 0 && state.comboTimer <= 0) state.comboTimer = 2.5;
     }
-    updateStats();
-    if (state.efficiency >= 100) {
-      winGame();
-    } else if (state.cleared > 0 && state.cleared % 8 === 0) {
-      state.wave++;
-      log(`wave ${state.wave} — patterns hold; load rises`, "sys");
-      updateStats();
-    }
-  }
 
-  function winGame() {
-    state.win = true;
-    state.running = false;
-    AudioEng.win();
-    document.getElementById("winText").textContent =
-      `Cleared ${state.cleared} inefficiencies across ${state.wave} wave(s). Payback achieved. The Genies keep running.`;
-    document.getElementById("winOverlay").classList.remove("hidden");
-    log("payback < 24 months — board quiet", "ok");
-  }
-
-  function refreshCDUI() {
-    GENIES.forEach((g) => {
-      const el = document.querySelector(`[data-cd="${g.id}"]`);
-      const btn = document.querySelector(`.genie-btn[data-id="${g.id}"]`);
-      if (!el || !btn) return;
-      const cd = state.genieCD[g.id];
-      if (cd > 0) {
-        el.textContent = cd.toFixed(1) + "s";
-        btn.classList.add("cooling");
-        btn.disabled = true;
-      } else {
-        el.textContent = "";
-        btn.classList.remove("cooling");
-        btn.disabled = false;
+    const v = state.van;
+    const turbo = state.keys["shift"] ? 1.55 : 1;
+    const accel = 560 * turbo, maxSp = 300 * turbo, fric = 3.4;
+    let ax = 0, ay = 0;
+    if (state.keys["w"] || state.keys["arrowup"]) ay -= 1;
+    if (state.keys["s"] || state.keys["arrowdown"]) ay += 1;
+    if (state.keys["a"] || state.keys["arrowleft"]) ax -= 1;
+    if (state.keys["d"] || state.keys["arrowright"]) ax += 1;
+    if (ax || ay) {
+      const len = Math.hypot(ax, ay) || 1;
+      ax /= len; ay /= len;
+      v.vx += ax * accel * dt;
+      v.vy += ay * accel * dt;
+      v.angle = Math.atan2(v.vy, v.vx);
+      AudioEng.engine(Math.hypot(v.vx, v.vy) / maxSp);
+      if (turbo > 1 && Math.random() < 0.3) {
+        state.particles.push({
+          x: v.x - Math.cos(v.angle) * 16,
+          y: v.y - Math.sin(v.angle) * 16,
+          vx: -Math.cos(v.angle) * 30 + (Math.random() - 0.5) * 20,
+          vy: -Math.sin(v.angle) * 30 + (Math.random() - 0.5) * 20,
+          life: 0.25, color: "rgba(78,200,240,0.5)", r: 2
+        });
       }
-    });
-  }
+    }
+    v.vx -= v.vx * fric * dt;
+    v.vy -= v.vy * fric * dt;
+    const sp = Math.hypot(v.vx, v.vy);
+    if (sp > maxSp) {
+      v.vx = v.vx / sp * maxSp;
+      v.vy = v.vy / sp * maxSp;
+    }
+    v.x = clamp(v.x + v.vx * dt, 30, WORLD.w - 30);
+    v.y = clamp(v.y + v.vy * dt, 30, WORLD.h - 30);
+    v.speed = Math.hypot(v.vx, v.vy);
 
-  function update(dt) {
-    if (!state.running) return;
-    state.t += dt;
-
-    GENIES.forEach((g) => {
-      if (state.genieCD[g.id] > 0) {
-        state.genieCD[g.id] = Math.max(0, state.genieCD[g.id] - dt);
+    for (const c of CLIENTS) {
+      const pad = 6;
+      if (v.x > c.x - pad && v.x < c.x + c.w + pad &&
+          v.y > c.y - pad && v.y < c.y + c.h + pad) {
+        const cx = c.x + c.w / 2, cy = c.y + c.h / 2;
+        const dx = v.x - cx, dy = v.y - cy;
+        if (Math.abs(dx) / c.w > Math.abs(dy) / c.h) {
+          v.x = dx > 0 ? c.x + c.w + pad : c.x - pad;
+          v.vx *= -0.3;
+        } else {
+          v.y = dy > 0 ? c.y + c.h + pad : c.y - pad;
+          v.vy *= -0.3;
+        }
       }
-    });
-    refreshCDUI();
-
-    state.spawnTimer -= dt;
-    if (state.spawnTimer <= 0) {
-      spawnTask();
-      const base = Math.max(1.1, 3.2 - state.wave * 0.25);
-      state.spawnTimer = base + Math.random() * 1.2;
     }
 
-    // slow efficiency bleed if many tasks (ops debt)
-    if (state.tasks.length > 8) {
-      state.efficiency = Math.max(0, state.efficiency - dt * 0.8);
-      updateStats();
+    state.monthT += dt * 1000;
+    if (state.monthT >= state.monthMs) {
+      state.monthT = 0;
+      advanceMonth();
     }
 
-    state.tasks.forEach((t) => {
-      t.age += dt;
-      t.pulse += dt * 3;
+    tickIncidents(dt);
+
+    for (const t of state.traffic) {
       t.x += t.vx * dt;
       t.y += t.vy * dt;
-      if (t.x < t.r || t.x > W - t.r) t.vx *= -1;
-      if (t.y < t.r || t.y > H - t.r) t.vy *= -1;
-      t.x = Math.max(t.r, Math.min(W - t.r, t.x));
-      t.y = Math.max(t.r, Math.min(H - t.r, t.y));
-    });
+      if (t.x < 0) t.x = WORLD.w;
+      if (t.x > WORLD.w) t.x = 0;
+      if (t.y < 0) t.y = WORLD.h;
+      if (t.y > WORLD.h) t.y = 0;
+    }
 
     for (let i = state.particles.length - 1; i >= 0; i--) {
       const p = state.particles[i];
       p.life -= dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.vy += 40 * dt;
+      p.vx *= 0.96; p.vy *= 0.96;
       if (p.life <= 0) state.particles.splice(i, 1);
     }
+    for (let i = state.floats.length - 1; i >= 0; i--) {
+      const f = state.floats[i];
+      f.life -= dt;
+      f.y += f.vy * dt;
+      if (f.life <= 0) state.floats.splice(i, 1);
+    }
+    for (const g of state.floatingGenies) g.phase += dt * 2.2;
+    for (const c of CLIENTS) state.sites[c.id].pulse += dt * 2;
   }
 
-  function draw() {
-    ctx.clearRect(0, 0, W, H);
+  // camera always follows
+  if (state.running) {
+    const v = state.van;
+    const cw = canvas._cssW || canvas.clientWidth;
+    const ch = canvas._cssH || canvas.clientHeight;
+    state.cam.x += (v.x - cw / 2 - state.cam.x) * Math.min(1, 6 * dt);
+    state.cam.y += (v.y - ch / 2 - state.cam.y) * Math.min(1, 6 * dt);
+    state.cam.x = clamp(state.cam.x, 0, Math.max(0, WORLD.w - cw));
+    state.cam.y = clamp(state.cam.y, 0, Math.max(0, WORLD.h - ch));
+    if (state.nearSite) {
+      const near = nearestSite(100);
+      if (near && near.id === state.nearSite.id) positionDeployPanel(near);
+      else if (!near || near.id !== state.nearSite.id) {
+        // keep panel if still reasonably close
+        const d = Math.hypot(
+          v.x - (state.nearSite.x + state.nearSite.w / 2),
+          v.y - (state.nearSite.y + state.nearSite.h / 2)
+        );
+        if (d > 160) closeDeploy();
+      }
+    }
+  }
+}
 
-    // soft nodes network
-    ctx.strokeStyle = "rgba(77,163,255,0.06)";
-    ctx.lineWidth = 1;
-    for (let i = 0; i < state.tasks.length; i++) {
-      for (let j = i + 1; j < state.tasks.length; j++) {
-        const a = state.tasks[i], b = state.tasks[j];
-        const dx = a.x - b.x, dy = a.y - b.y;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < 160 * 160) {
-          ctx.globalAlpha = 1 - Math.sqrt(d2) / 160;
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
-          ctx.stroke();
+// ── Draw ──
+function resize() {
+  const wrap = $("map-wrap");
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  canvas.width = Math.max(320, Math.floor(w * dpr));
+  canvas.height = Math.max(240, Math.floor(h * dpr));
+  canvas.style.width = w + "px";
+  canvas.style.height = h + "px";
+  canvas._cssW = w;
+  canvas._cssH = h;
+}
+window.addEventListener("resize", resize);
+
+function draw() {
+  const w = canvas._cssW || canvas.clientWidth;
+  const h = canvas._cssH || canvas.clientHeight;
+  const cam = state.cam;
+
+  ctx.fillStyle = "#060c16";
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.save();
+  ctx.translate(-cam.x, -cam.y);
+
+  drawCityBlocks(w, h, cam);
+  drawRoads();
+
+  for (const c of CLIENTS) drawBuilding(c);
+  drawIncidents();
+  drawFloatingGenies();
+
+  for (const t of state.traffic) {
+    ctx.fillStyle = t.color;
+    ctx.fillRect(t.x - t.w / 2, t.y - t.h / 2, t.w, t.h);
+    ctx.fillStyle = "rgba(255,255,200,0.35)";
+    ctx.fillRect(t.x + t.w / 2 - 3, t.y - 2, 3, 4);
+  }
+
+  for (const p of state.particles) {
+    ctx.globalAlpha = clamp(p.life * 2, 0, 1);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  for (const f of state.floats) {
+    ctx.globalAlpha = clamp(f.life * 1.4, 0, 1);
+    ctx.fillStyle = f.color;
+    ctx.font = "bold 12px system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText(f.text, f.x, f.y);
+  }
+  ctx.globalAlpha = 1;
+
+  drawVan(state.van);
+
+  const near = nearestSite(115);
+  if (near && state.running && !state.paused) {
+    const cx = near.x + near.w / 2, cy = near.y + near.h / 2;
+    const sc = SCRIPTS.find(s => s.id === state.selectedScript);
+    const aff = affinityMul(near.id, state.selectedScript) > 1;
+    ctx.strokeStyle = aff ? "rgba(240,193,75,0.65)" : "rgba(78,200,240,0.5)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, 72, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = aff ? "rgba(240,193,75,0.95)" : "rgba(78,200,240,0.9)";
+    ctx.font = "11px system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText("[E] " + sc.name + (aff ? " ★" : ""), cx, near.y - 12);
+  }
+
+  ctx.restore();
+
+  drawMinimap(w, h);
+
+  // month progress
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.fillRect(12, 12, 148, 7);
+  ctx.fillStyle = "#2a7098";
+  ctx.fillRect(12, 12, 148 * clamp(state.monthT / state.monthMs, 0, 1), 7);
+  ctx.fillStyle = "#6a90b0";
+  ctx.font = "10px system-ui";
+  ctx.textAlign = "left";
+  ctx.fillText("month " + state.month + " · auto-advance", 12, 32);
+
+  // selected script chip
+  const sc = SCRIPTS.find(s => s.id === state.selectedScript);
+  if (sc) {
+    ctx.fillStyle = "rgba(8,18,32,0.85)";
+    ctx.strokeStyle = sc.color;
+    ctx.lineWidth = 1.5;
+    roundRect(12, 42, 150, 22, 4);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = sc.color;
+    ctx.font = "11px ui-monospace, monospace";
+    ctx.textAlign = "left";
+    ctx.fillText(sc.name + " ×" + (state.inventory[sc.id] || 0), 20, 57);
+  }
+
+  if (state.monthFlash > 0) {
+    ctx.fillStyle = `rgba(78,200,240,${state.monthFlash * 0.15})`;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  if (state.paused) {
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#4ec8f0";
+    ctx.font = "bold 28px system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText("PAUSED", w / 2, h / 2);
+  }
+
+  if (state.win) {
+    ctx.fillStyle = "rgba(10,40,30,0.22)";
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#3dd68c";
+    ctx.font = "bold 16px system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText("◈ PORTFOLIO ≤ 24 MO PAYBACK — GENIES ENGAGED", w / 2, 48);
+  }
+}
+
+function drawCityBlocks(viewW, viewH, cam) {
+  const cols = ["#0a1420", "#0c1624", "#081818", "#0e1420", "#0a1820"];
+  const tile = 200;
+  const x0 = Math.floor(cam.x / tile) * tile;
+  const y0 = Math.floor(cam.y / tile) * tile;
+  for (let x = x0 - tile; x < cam.x + viewW + tile; x += tile) {
+    for (let y = y0 - tile; y < cam.y + viewH + tile; y += tile) {
+      const ix = Math.floor(x / tile);
+      const iy = Math.floor(y / tile);
+      const hi = ((ix * 17 + iy * 31) >>> 0) % cols.length;
+      ctx.fillStyle = cols[hi];
+      ctx.fillRect(x + 4, y + 4, tile - 8, tile - 8);
+      // parking dots
+      if (((ix + iy) % 3) === 0) {
+        ctx.fillStyle = "rgba(40,60,90,0.25)";
+        for (let i = 0; i < 3; i++) {
+          ctx.fillRect(x + 30 + i * 50, y + 40, 28, 12);
         }
       }
     }
-    ctx.globalAlpha = 1;
+  }
+}
 
-    // tasks
-    state.tasks.forEach((t) => {
-      const pulse = 1 + Math.sin(t.pulse) * 0.08;
-      const r = t.r * pulse;
-      const frac = Math.max(0, t.hp / t.maxHp);
-
-      ctx.beginPath();
-      ctx.arc(t.x, t.y, r + 6, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(248,113,113,${0.08 + (1 - frac) * 0.05})`;
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.arc(t.x, t.y, r, 0, Math.PI * 2);
-      const grad = ctx.createRadialGradient(t.x - 4, t.y - 4, 2, t.x, t.y, r);
-      grad.addColorStop(0, "#ff8a8a");
-      grad.addColorStop(1, "#b91c1c");
-      ctx.fillStyle = grad;
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,200,200,0.5)";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // hp arc
-      ctx.beginPath();
-      ctx.arc(t.x, t.y, r + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac);
-      ctx.strokeStyle = "#4ade80";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      ctx.fillStyle = "#f1f5f9";
-      ctx.font = "600 9px SF Mono, Menlo, monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(t.label, t.x, t.y - r - 10);
-      ctx.fillStyle = "#94a3b8";
-      ctx.font = "8px SF Mono, Menlo, monospace";
-      ctx.fillText(t.tag, t.x, t.y + 3);
-    });
-
-    // particles
-    state.particles.forEach((p) => {
-      ctx.globalAlpha = Math.max(0, p.life * 2);
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    ctx.globalAlpha = 1;
-
-    // selected genie cursor hint
-    const g = GENIES.find((x) => x.id === state.selected);
-    if (g && state.running) {
-      ctx.strokeStyle = g.color;
-      ctx.globalAlpha = 0.25;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.arc(W - 28, 28, 12, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = g.color;
-      ctx.font = "9px SF Mono, Menlo, monospace";
-      ctx.textAlign = "right";
-      ctx.fillText(g.label, W - 14, 18);
+function drawRoads() {
+  ctx.strokeStyle = "#141c28";
+  ctx.lineWidth = 40;
+  for (let x = 0; x <= WORLD.w; x += 300) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, WORLD.h); ctx.stroke();
+  }
+  for (let y = 0; y <= WORLD.h; y += 280) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WORLD.w, y); ctx.stroke();
+  }
+  ctx.strokeStyle = "rgba(240,193,75,0.22)";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([12, 16]);
+  for (let x = 0; x <= WORLD.w; x += 300) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, WORLD.h); ctx.stroke();
+  }
+  for (let y = 0; y <= WORLD.h; y += 280) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WORLD.w, y); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // intersections
+  ctx.fillStyle = "rgba(20,30,45,0.5)";
+  for (let x = 0; x <= WORLD.w; x += 300) {
+    for (let y = 0; y <= WORLD.h; y += 280) {
+      ctx.fillRect(x - 22, y - 22, 44, 44);
     }
+  }
+}
 
-    if (!state.running && !state.win && state.tasks.length === 0) {
-      ctx.fillStyle = "rgba(200,214,229,0.35)";
-      ctx.font = "13px SF Mono, Menlo, monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("ops board idle — press START", W / 2, H / 2);
+function drawBuilding(c) {
+  const s = state.sites[c.id];
+  const waste = s.waste;
+  const hasAff = c.pref.some(p => (s.scripts[p] || 0) > 0);
+
+  ctx.shadowColor = hasAff ? "#f0c14b" : c.accent;
+  ctx.shadowBlur = 10 + Math.sin(s.pulse) * 3 + waste * 0.1;
+
+  ctx.fillStyle = c.color;
+  roundRect(c.x, c.y, c.w, c.h, 6);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // roof stripe for affinity-met sites
+  if (hasAff) {
+    ctx.fillStyle = "rgba(240,193,75,0.35)";
+    ctx.fillRect(c.x, c.y, c.w, 5);
+  }
+
+  ctx.fillStyle = "rgba(255,255,255,0.06)";
+  ctx.fillRect(c.x + 8, c.y + 8, c.w - 16, 14);
+
+  const wx = 5, wy = 4;
+  const cellW = (c.w - 20) / wx, cellH = (c.h - 36) / wy;
+  for (let i = 0; i < wx; i++) {
+    for (let j = 0; j < wy; j++) {
+      const on = ((i * 3 + j * 7 + Math.floor(state.time * 1.5)) % 5) !== 0;
+      ctx.fillStyle = on ? "rgba(255,220,120,0.22)" : "rgba(40,60,90,0.35)";
+      ctx.fillRect(c.x + 10 + i * cellW + 2, c.y + 28 + j * cellH + 2, cellW - 4, cellH - 4);
     }
   }
 
-  let last = performance.now();
-  function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
-    update(dt);
-    draw();
-    requestAnimationFrame(frame);
+  ctx.fillStyle = c.accent;
+  ctx.fillRect(c.x, c.y + c.h - 6, c.w, 6);
+
+  const barW = c.w - 16;
+  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  ctx.fillRect(c.x + 8, c.y + c.h + 6, barW, 5);
+  ctx.fillStyle = waste > 40 ? "#ff5a6a" : waste > 20 ? "#f0c14b" : "#3dd68c";
+  ctx.fillRect(c.x + 8, c.y + c.h + 6, barW * (waste / 100), 5);
+
+  ctx.fillStyle = "#e0eef8";
+  ctx.font = "bold 12px system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText(c.short, c.x + c.w / 2, c.y - 16);
+  ctx.font = "10px ui-monospace, monospace";
+  ctx.fillStyle = "#6a8aa8";
+  ctx.fillText("$" + c.fee + "k · " + fmtMo(s.payback), c.x + c.w / 2, c.y - 4);
+
+  if (waste > 35) {
+    const n = Math.floor((waste - 30) / 12);
+    for (let i = 0; i < n; i++) {
+      const px = c.x + c.w * (0.3 + 0.15 * i) + Math.sin(state.time * 2 + i) * 4;
+      const py = c.y - 8 - ((state.time * 30 + i * 20) % 40);
+      ctx.globalAlpha = 0.15 + 0.1 * Math.sin(state.time + i);
+      ctx.fillStyle = "#888";
+      ctx.beginPath();
+      ctx.arc(px, py, 6 + i, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
+}
 
-  // events
-  canvas.addEventListener("pointerdown", (e) => {
-    if (!state.running) return;
-    const rect = canvas.getBoundingClientRect();
-    const mx = ((e.clientX - rect.left) / rect.width) * W;
-    const my = ((e.clientY - rect.top) / rect.height) * H;
-    const task = hitTest(mx, my);
-    if (task) deployOn(task);
-  });
+function drawIncidents() {
+  for (const inc of state.incidents) {
+    const c = CLIENTS.find(x => x.id === inc.siteId);
+    if (!c) continue;
+    const cx = c.x + c.w / 2;
+    const cy = c.y - 48 + Math.sin(inc.pulse) * 4;
+    const r = 14 + Math.sin(inc.pulse * 1.5) * 2;
+    ctx.fillStyle = "rgba(255,90,106,0.2)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = inc.color;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#ff5a6a";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "#0a1018";
+    ctx.font = "bold 12px system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText("!", cx, cy + 4);
+    ctx.fillStyle = "#ff8a96";
+    ctx.font = "9px system-ui";
+    ctx.fillText(inc.need + ".sh", cx, cy + r + 12);
+    // timer ring
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(inc.life / 40, 0, 1));
+    ctx.stroke();
+  }
+}
 
-  window.addEventListener("resize", () => {
-    resize();
-  });
+function drawFloatingGenies() {
+  const bySite = {};
+  for (const g of state.floatingGenies) {
+    if (!bySite[g.siteId]) bySite[g.siteId] = [];
+    if (!bySite[g.siteId].find(x => x.scriptId === g.scriptId)) {
+      bySite[g.siteId].push(g);
+    }
+  }
+  for (const siteId of Object.keys(bySite)) {
+    const c = CLIENTS.find(x => x.id === siteId);
+    if (!c) continue;
+    const list = bySite[siteId];
+    list.forEach((g, i) => {
+      const bob = Math.sin(g.phase) * 6;
+      const gx = c.x + c.w / 2 + (i - (list.length - 1) / 2) * 36;
+      const gy = c.y - 28 + bob;
+      const p = getPortrait(g.scriptId, 64);
+      if (p) {
+        ctx.save();
+        ctx.shadowColor = "#4ec8f0";
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(gx, gy, 16, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(p, gx - 16, gy - 16, 32, 32);
+        ctx.restore();
+        ctx.strokeStyle = "rgba(78,200,240,0.7)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(gx, gy, 16, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = "#3a9fd8";
+        ctx.beginPath();
+        ctx.arc(gx, gy, 12, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+  }
+}
 
-  document.getElementById("btnStart").addEventListener("click", () => {
-    document.getElementById("startOverlay").classList.add("hidden");
-    state.running = true;
-    state.win = false;
-    state.efficiency = 0;
-    state.cleared = 0;
-    state.wave = 1;
-    state.tasks = [];
-    state.spawnTimer = 0.3;
-    AudioEng.init();
-    log("The Genies online — cron-triggered · idempotent · observable", "sys");
-    for (let i = 0; i < 4; i++) spawnTask(true);
-    updateStats();
-  });
+function drawVan(v) {
+  ctx.save();
+  ctx.translate(v.x, v.y);
+  ctx.rotate(v.angle);
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  ctx.fillRect(-12, -6, 28, 14);
+  ctx.fillStyle = "#1a3858";
+  roundRect(-14, -8, 32, 16, 3);
+  ctx.fill();
+  ctx.fillStyle = "#4ec8f0";
+  ctx.fillRect(10, -6, 6, 12);
+  ctx.fillStyle = "#0a1828";
+  ctx.fillRect(-8, -5, 12, 10);
+  ctx.fillStyle = "#f0c14b";
+  ctx.beginPath();
+  ctx.moveTo(-2, -3);
+  ctx.lineTo(2, 0);
+  ctx.lineTo(-2, 3);
+  ctx.closePath();
+  ctx.fill();
+  // headlights
+  if (v.speed > 8) {
+    ctx.fillStyle = "rgba(255,255,200,0.5)";
+    ctx.beginPath();
+    ctx.moveTo(16, -5);
+    ctx.lineTo(48, -16);
+    ctx.lineTo(48, 16);
+    ctx.lineTo(16, 5);
+    ctx.fill();
+  }
+  ctx.restore();
+  ctx.fillStyle = "#4ec8f0";
+  ctx.font = "10px system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText("MITHRIL", v.x, v.y - 16);
+}
 
-  document.getElementById("btnAgain").addEventListener("click", () => {
-    document.getElementById("winOverlay").classList.add("hidden");
-    document.getElementById("btnStart").click();
-  });
+function drawMinimap(w, h) {
+  const mw = 140, mh = 94, mx = w - mw - 12, my = h - mh - 12;
+  ctx.fillStyle = "rgba(6,12,22,0.88)";
+  ctx.strokeStyle = "#2a5080";
+  ctx.lineWidth = 1;
+  ctx.fillRect(mx, my, mw, mh);
+  ctx.strokeRect(mx, my, mw, mh);
 
-  document.getElementById("btnMute").addEventListener("click", () => {
-    const m = AudioEng.toggleMute();
-    document.getElementById("btnMute").textContent = m ? "♪ UNMUTE" : "♪ MUTE";
-  });
+  const sx = mw / WORLD.w, sy = mh / WORLD.h;
+  for (const c of CLIENTS) {
+    const s = state.sites[c.id];
+    const inc = state.incidents.find(i => i.siteId === c.id);
+    ctx.fillStyle = inc ? "#ff5a6a" : s.waste > 40 ? "#ff5a6a" : s.waste < 18 ? "#3dd68c" : c.accent;
+    ctx.fillRect(mx + c.x * sx, my + c.y * sy, Math.max(3, c.w * sx), Math.max(3, c.h * sy));
+  }
+  ctx.fillStyle = "#4ec8f0";
+  ctx.beginPath();
+  ctx.arc(mx + state.van.x * sx, my + state.van.y * sy, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+  ctx.strokeRect(
+    mx + state.cam.x * sx,
+    my + state.cam.y * sy,
+    (canvas._cssW || w) * sx,
+    (canvas._cssH || h) * sy
+  );
+  ctx.fillStyle = "#5a7a9a";
+  ctx.font = "8px system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText("click to warp", mx + mw / 2, my + mh - 4);
+}
 
-  document.getElementById("btnPause").addEventListener("click", () => {
-    if (state.win) return;
-    state.running = !state.running;
-    document.getElementById("btnPause").textContent = state.running ? "PAUSE" : "RESUME";
-    log(state.running ? "resumed" : "paused", "sys");
-  });
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
 
-  // boot
-  buildGenieBar();
-  resize();
-  updateStats();
-  log("awaiting START OPS…", "sys");
+// ── Loop ──
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  if (!canvas._cssW) resize();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  update(dt);
+  draw();
   requestAnimationFrame(frame);
+}
 
-  // hero fallback
-  const img = document.getElementById("heroImg");
-  img.onerror = () => { img.style.display = "none"; };
-})();
+// Boot
+initSites();
+recomputeAll();
+renderScripts();
+renderShop();
+renderSheet();
+renderLog();
+resize();
+
+heroImg.onload = () => {
+  heroReady = true;
+  Object.keys(portraitCache).forEach(k => delete portraitCache[k]);
+  renderScripts();
+};
+if (heroImg.complete && heroImg.naturalWidth) heroReady = true;
+
+requestAnimationFrame(frame);
+state.running = false;
 </script>
 </body>
 </html>
