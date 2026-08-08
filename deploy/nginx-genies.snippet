@@ -1,0 +1,15 @@
+# BEGIN TheGenies — managed by TheGenies/deploy.sh (do not edit by hand)
+    # Pretty path: https://themithrilcompany.com/genies/
+    location /genies/ {
+        alias /var/www/TheGenies/;
+        index index.html;
+        add_header Cache-Control "no-cache";
+    }
+
+    # Flat URL: https://themithrilcompany.com/genies.html
+    location = /genies.html {
+        alias /var/www/TheGenies/index.html;
+        default_type text/html;
+        add_header Cache-Control "no-cache";
+    }
+# END TheGenies
